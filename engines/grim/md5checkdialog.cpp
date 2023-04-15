@@ -19,8 +19,11 @@
  *
  */
 
+#include "common/keyboard.h"
 #include "common/system.h"
+#include "common/textconsole.h"
 #include "common/translation.h"
+#include "common/events.h"
 
 #include "gui/gui-manager.h"
 #include "gui/ThemeEval.h"
@@ -30,6 +33,10 @@
 #include "engines/grim/md5check.h"
 
 namespace Grim {
+
+enum {
+    kCancelCmd
+};
 
 MD5CheckDialog::MD5CheckDialog() :
 		GUI::Dialog(30, 20, 260, 124) {
@@ -73,6 +80,8 @@ MD5CheckDialog::MD5CheckDialog() :
 	height += 20;
 
 	_progressSliderWidget = new GUI::SliderWidget(this, 20, height + 10, _w - 40, 10);
+    _cancelButton = new GUI::ButtonWidget(this, 20, height + 20, 40, 10, false, _("Cancel"), 
+            _("Cancel the MD5 check."), kCancelCmd);
 
 	check();
 }
@@ -83,18 +92,36 @@ void MD5CheckDialog::check() {
 }
 
 void MD5CheckDialog::handleTickle() {
+
+    Dialog::handleTickle();
+    
 	int p, t;
 	Common::String filename;
-	if (!MD5Check::advanceCheck(&p, &t)) {
-		_checkOk = false;
-	}
-	_progressSliderWidget->setValue(p * 100 / t);
-	_progressSliderWidget->markAsDirty();
+	// if (!MD5Check::advanceCheck(&p, &t)) {
+	// 	_checkOk = false;
+	// }
+	// _progressSliderWidget->setValue(p * 100 / t);
+	// _progressSliderWidget->markAsDirty();
 
-	if (p == t) {
-		setResult(_checkOk);
-		close();
-	}
+	// if (p == t) {
+	// 	setResult(_checkOk);
+	// 	close();
+	// }
+}
+
+void MD5CheckDialog::handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) {
+
+    warning("Here");
+
+    switch (cmd) {
+    case kCancelCmd:
+        debugC(5, LogMessageType::kDebug, "MD5CheckDialog::handleCommand(): kCancelCmd");
+        break;
+    default:
+        Dialog::handleCommand(sender, cmd, data);
+        break;
+    }
+
 }
 
 }

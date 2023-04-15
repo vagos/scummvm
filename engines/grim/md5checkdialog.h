@@ -25,6 +25,7 @@
 #include "common/rect.h"
 
 #include "gui/dialog.h"
+#include "gui/widget.h"
 
 namespace GUI {
 class SliderWidget;
@@ -38,11 +39,13 @@ public:
 
 protected:
 	void handleTickle() override;
+	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
 private:
 	void check();
 
 	GUI::SliderWidget *_progressSliderWidget;
+    GUI::ButtonWidget *_cancelButton;
 
 	bool _checkOk;
 };
