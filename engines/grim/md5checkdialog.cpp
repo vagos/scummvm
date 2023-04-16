@@ -24,6 +24,7 @@
 #include "common/textconsole.h"
 #include "common/translation.h"
 #include "common/events.h"
+#include "common/timer.h"
 
 #include "gui/gui-manager.h"
 #include "gui/ThemeEval.h"
@@ -35,7 +36,7 @@
 namespace Grim {
 
 enum {
-    kCancelCmd
+    kCancelCmd = 1,
 };
 
 MD5CheckDialog::MD5CheckDialog() :
@@ -80,14 +81,30 @@ MD5CheckDialog::MD5CheckDialog() :
 	height += 20;
 
 	_progressSliderWidget = new GUI::SliderWidget(this, 20, height + 10, _w - 40, 10);
-    _cancelButton = new GUI::ButtonWidget(this, 20, height + 20, 40, 10, false, _("Cancel"), 
+    _cancelButton = new GUI::ButtonWidget(this, 20 + (_w - 40)/4, height + 30, (_w - 40) / 2, 20, false, _("Cancel"), 
             _("Cancel the MD5 check."), kCancelCmd);
 
 	check();
 }
 
+void MD5CheckDialog::updateTimerCallback(void *data) {
+    
+    MD5CheckDialog* _this = (MD5CheckDialog*)data;
+
+    g_system->getTimerManager()->removeTimerProc(MD5CheckDialog::updateTimerCallback);
+    if (_this->_checkOk) return;
+    g_system->getTimerManager()->installTimerProc(MD5CheckDialog::updateTimerCallback, 200000, _this, "md5UpdateTimer");
+
+    Common::Event event;
+    g_system->getEventManager()->pollEvent(event);
+    g_gui.processEvent(event, _this);
+
+}
+
 void MD5CheckDialog::check() {
-	_checkOk = true;
+	_checkOk = false;
+    
+    g_system->getTimerManager()->installTimerProc(&MD5CheckDialog::updateTimerCallback, 200000, this, "md5UpdateTimer");
 	MD5Check::startCheckFiles();
 }
 
@@ -97,25 +114,28 @@ void MD5CheckDialog::handleTickle() {
     
 	int p, t;
 	Common::String filename;
-	// if (!MD5Check::advanceCheck(&p, &t)) {
-	// 	_checkOk = false;
-	// }
-	// _progressSliderWidget->setValue(p * 100 / t);
-	// _progressSliderWidget->markAsDirty();
+	if (!MD5Check::advanceCheck(&p, &t)) {
+		_checkOk = false;
+	}
 
-	// if (p == t) {
-	// 	setResult(_checkOk);
-	// 	close();
-	// }
+	_progressSliderWidget->setValue(p * 100 / t);
+	_progressSliderWidget->markAsDirty();
+
+	if (p == t) {
+        _checkOk = true;
+		setResult(_checkOk);
+		close();
+	}
 }
 
 void MD5CheckDialog::handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) {
 
-    warning("Here");
-
     switch (cmd) {
     case kCancelCmd:
         debugC(5, LogMessageType::kDebug, "MD5CheckDialog::handleCommand(): kCancelCmd");
+        _checkOk = false;
+		setResult(_checkOk);
+        close();
         break;
     default:
         Dialog::handleCommand(sender, cmd, data);

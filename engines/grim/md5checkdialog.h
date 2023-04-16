@@ -43,6 +43,7 @@ protected:
 
 private:
 	void check();
+    static void updateTimerCallback(void *refCon); 
 
 	GUI::SliderWidget *_progressSliderWidget;
     GUI::ButtonWidget *_cancelButton;
