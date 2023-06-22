@@ -56,16 +56,11 @@ struct resource_index_t {
 
 //////////////////////////////////////////////////////////////////////
 
-static SciVersion s_sciVersion = SCI_VERSION_NONE;	// FIXME: Move this inside a suitable class, e.g. SciEngine
-
-SciVersion getSciVersion() {
-	assert(s_sciVersion != SCI_VERSION_NONE);
-	return s_sciVersion;
-}
+SciVersion g_sciVersion = SCI_VERSION_NONE;	// FIXME: Move this inside a suitable class, e.g. SciEngine
 
 SciVersion getSciVersionForDetection() {
 	assert(!g_sci);
-	return s_sciVersion;
+	return g_sciVersion;
 }
 
 const char *getSciVersionDesc(SciVersion version) {
@@ -927,7 +922,7 @@ ChunkResourceSource::ChunkResourceSource(const Common::String &name, uint16 numb
 void ChunkResourceSource::scanSource(ResourceManager *resMan) {
 	Resource *chunk = resMan->findResource(ResourceId(kResourceTypeChunk, _number), false);
 
-	if (!chunk)
+	if (chunk == nullptr)
 		error("Trying to load non-existent chunk");
 
 	const byte *ptr = chunk->data();
@@ -963,11 +958,13 @@ void ChunkResourceSource::scanSource(ResourceManager *resMan) {
 
 void ChunkResourceSource::loadResource(ResourceManager *resMan, Resource *res) {
 	Resource *chunk = resMan->findResource(ResourceId(kResourceTypeChunk, _number), false);
+	if (chunk == nullptr)
+		error("Trying to load non-existent chunk");
 
-	if (!_resMap.contains(res->_id))
+	ResourceEntry entry;
+	if (!_resMap.tryGetVal(res->_id, entry))
 		error("Trying to load non-existent resource %s from chunk %d", res->_id.toString().c_str(), _number);
 
-	ResourceEntry entry = _resMap[res->_id];
 	if (entry.offset + entry.length > chunk->size()) {
 		error("Resource %s is too large to exist within chunk %d (%u + %u > %u)", res->_id.toString().c_str(), _number, entry.offset, entry.length, chunk->size());
 	}
@@ -2633,7 +2630,7 @@ bool ResourceManager::checkResourceForSignatures(ResourceType resourceType, uint
 void ResourceManager::detectSciVersion() {
 	// We use the view compression to set a preliminary s_sciVersion for the sake of getResourceInfo
 	// Pretend we have a SCI0 game
-	s_sciVersion = SCI_VERSION_0_EARLY;
+	g_sciVersion = SCI_VERSION_0_EARLY;
 	bool oldDecompressors = true;
 
 	ResourceCompression viewCompression;
@@ -2652,7 +2649,7 @@ void ResourceManager::detectSciVersion() {
 		// If it's a different compression type from kCompLZW, the game is probably
 		// SCI_VERSION_1_EGA_ONLY or later. If the views are uncompressed, it is
 		// likely not an early disk game.
-		s_sciVersion = SCI_VERSION_1_EGA_ONLY;
+		g_sciVersion = SCI_VERSION_1_EGA_ONLY;
 		oldDecompressors = false;
 	}
 
@@ -2691,15 +2688,15 @@ void ResourceManager::detectSciVersion() {
 		// versions of SCI3 PC games. That is, the Mac scripts are compiled as
 		// separate script and hunk resources instead of the SCI3 script format.
 		if (res) {
-			s_sciVersion = SCI_VERSION_2_1_EARLY; // we check for SCI2.1 specifics a bit later
+			g_sciVersion = SCI_VERSION_2_1_EARLY; // we check for SCI2.1 specifics a bit later
 		} else {
-			s_sciVersion = SCI_VERSION_1_1;
+			g_sciVersion = SCI_VERSION_1_1;
 			return;
 		}
 	}
 
 	// Handle SCI32 versions here
-	if (s_sciVersion != SCI_VERSION_2_1_EARLY) {
+	if (g_sciVersion != SCI_VERSION_2_1_EARLY) {
 		if (_volVersion >= kResVersionSci2) {
 			Common::List<ResourceId> heaps = listResources(kResourceTypeHeap);
 			bool hasHeapResources = !heaps.empty();
@@ -2708,18 +2705,18 @@ void ResourceManager::detectSciVersion() {
 			// SCI1 Late resource maps have the resource types or'd with
 			// 0x80. We differentiate between SCI2 and SCI2.1/3 based on that.
 			if (_mapVersion == kResVersionSci1Late) {
-				s_sciVersion = SCI_VERSION_2;
+				g_sciVersion = SCI_VERSION_2;
 				return;
 			} else if (hasHeapResources) {
-				s_sciVersion = SCI_VERSION_2_1_EARLY; // exact SCI2.1 version is checked a bit later
+				g_sciVersion = SCI_VERSION_2_1_EARLY; // exact SCI2.1 version is checked a bit later
 			} else {
-				s_sciVersion = SCI_VERSION_3;
+				g_sciVersion = SCI_VERSION_3;
 				return;
 			}
 		}
 	}
 
-	if (s_sciVersion == SCI_VERSION_2_1_EARLY) {
+	if (g_sciVersion == SCI_VERSION_2_1_EARLY) {
 		// we only know that it's SCI2.1, not which exact version it is
 
 		// check, if selector "wordFail" inside vocab 997 exists, if it does it's SCI2.1 Early
@@ -2728,11 +2725,11 @@ void ResourceManager::detectSciVersion() {
 			return;
 		}
 
-		s_sciVersion = SCI_VERSION_2_1_MIDDLE;
+		g_sciVersion = SCI_VERSION_2_1_MIDDLE;
 		if (checkResourceForSignatures(kResourceTypeScript, 64918, detectSci21NewStringSignature, nullptr)) {
 			// new kString call detected, it's SCI2.1 late
 			// TODO: this call seems to be different on Mac
-			s_sciVersion = SCI_VERSION_2_1_LATE;
+			g_sciVersion = SCI_VERSION_2_1_LATE;
 			return;
 		}
 		return;
@@ -2742,7 +2739,7 @@ void ResourceManager::detectSciVersion() {
 	// If the game has any heap file (here we check for heap file 0), then
 	// it definitely uses a SCI1.1 kernel
 	if (testResource(ResourceId(kResourceTypeHeap, 0))) {
-		s_sciVersion = SCI_VERSION_1_1;
+		g_sciVersion = SCI_VERSION_1_1;
 		return;
 	}
 
@@ -2750,18 +2747,18 @@ void ResourceManager::detectSciVersion() {
 	case kResVersionSci0Sci1Early:
 		if (_viewType == kViewVga) {
 			// VGA
-			s_sciVersion = SCI_VERSION_1_EARLY;
+			g_sciVersion = SCI_VERSION_1_EARLY;
 			return;
 		}
 
 		// EGA
 		if (hasOldScriptHeader()) {
-			s_sciVersion = SCI_VERSION_0_EARLY;
+			g_sciVersion = SCI_VERSION_0_EARLY;
 			return;
 		}
 
 		if (hasSci0Voc999()) {
-			s_sciVersion = SCI_VERSION_0_LATE;
+			g_sciVersion = SCI_VERSION_0_LATE;
 			return;
 		}
 
@@ -2770,17 +2767,17 @@ void ResourceManager::detectSciVersion() {
 
 			// We first check for SCI1 vocab.999
 			if (testResource(ResourceId(kResourceTypeVocab, 999))) {
-				s_sciVersion = SCI_VERSION_01;
+				g_sciVersion = SCI_VERSION_01;
 				return;
 			}
 
 			// If vocab.999 is missing, we try vocab.900
 			if (testResource(ResourceId(kResourceTypeVocab, 900))) {
 				if (hasSci1Voc900()) {
-					s_sciVersion = SCI_VERSION_01;
+					g_sciVersion = SCI_VERSION_01;
 					return;
 				} else {
-					s_sciVersion = SCI_VERSION_0_LATE;
+					g_sciVersion = SCI_VERSION_0_LATE;
 					return;
 				}
 			}
@@ -2790,35 +2787,35 @@ void ResourceManager::detectSciVersion() {
 
 		// New decompressors. It's either SCI_VERSION_1_EGA_ONLY or SCI_VERSION_1_EARLY.
 		if (hasSci1Voc900()) {
-			s_sciVersion = SCI_VERSION_1_EGA_ONLY;
+			g_sciVersion = SCI_VERSION_1_EGA_ONLY;
 			return;
 		}
 
 		// SCI_VERSION_1_EARLY EGA versions lack the parser vocab
-		s_sciVersion = SCI_VERSION_1_EARLY;
+		g_sciVersion = SCI_VERSION_1_EARLY;
 		return;
 	case kResVersionSci1Middle:
 	case kResVersionKQ5FMT:
-		s_sciVersion = SCI_VERSION_1_MIDDLE;
+		g_sciVersion = SCI_VERSION_1_MIDDLE;
 		// Amiga SCI1 middle games are actually SCI1 late
 		if (_viewType == kViewAmiga || _viewType == kViewAmiga64)
-			s_sciVersion = SCI_VERSION_1_LATE;
+			g_sciVersion = SCI_VERSION_1_LATE;
 		// Same goes for Mac SCI1 middle games
 		if (g_sci && g_sci->getPlatform() == Common::kPlatformMacintosh)
-			s_sciVersion = SCI_VERSION_1_LATE;
+			g_sciVersion = SCI_VERSION_1_LATE;
 		return;
 	case kResVersionSci1Late:
 		if (_volVersion == kResVersionSci11) {
-			s_sciVersion = SCI_VERSION_1_1;
+			g_sciVersion = SCI_VERSION_1_1;
 			return;
 		}
-		s_sciVersion = SCI_VERSION_1_LATE;
+		g_sciVersion = SCI_VERSION_1_LATE;
 		return;
 	case kResVersionSci11:
-		s_sciVersion = SCI_VERSION_1_1;
+		g_sciVersion = SCI_VERSION_1_1;
 		return;
 	default:
-		s_sciVersion = SCI_VERSION_NONE;
+		g_sciVersion = SCI_VERSION_NONE;
 		error("detectSciVersion(): Unable to detect the game's SCI version");
 	}
 }

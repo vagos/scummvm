@@ -22,11 +22,13 @@
 #include "graphics/macgui/macwidget.h"
 
 #include "director/director.h"
-#include "director/castmember.h"
 #include "director/frame.h"
 #include "director/movie.h"
 #include "director/score.h"
 #include "director/sprite.h"
+#include "director/castmember/castmember.h"
+#include "director/castmember/bitmap.h"
+#include "director/castmember/shape.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-object.h"
 
@@ -60,6 +62,7 @@ Sprite::Sprite(Frame *frame) {
 	_moveable = false;
 	_editable = false;
 	_puppet = false;
+	_autoPuppet = false; // Based on Director in a Nutshell, page 15
 	_immediate = false;
 	_backColor = g_director->_wm->_colorWhite;
 	_foreColor = g_director->_wm->_colorBlack;
@@ -103,6 +106,7 @@ Sprite& Sprite::operator=(const Sprite &sprite) {
 	_moveable = sprite._moveable;
 	_editable = sprite._editable;
 	_puppet = sprite._puppet;
+	_autoPuppet = sprite._autoPuppet;
 	_immediate = sprite._immediate;
 	_backColor = sprite._backColor;
 	_foreColor = sprite._foreColor;
@@ -274,37 +278,6 @@ uint32 Sprite::getForeColor() {
 	default:
 		return _foreColor;
 	}
-}
-
-Common::Point Sprite::getRegistrationOffset() {
-	Common::Point result(0, 0);
-	if (!_cast)
-		return result;
-
-	switch (_cast->_type) {
-	case kCastBitmap:
-		{
-			BitmapCastMember *bc = (BitmapCastMember *)(_cast);
-
-			// stretch the offset
-			if (!_stretch && (_width != bc->_initialRect.width() || _height != bc->_initialRect.height())) {
-				result.x = (bc->_initialRect.left - bc->_regX) * _width / bc->_initialRect.width();
-				result.y = (bc->_initialRect.top - bc->_regY) * _height / bc->_initialRect.height();
-			} else {
-				result.x = bc->_initialRect.left - bc->_regX;
-				result.y = bc->_initialRect.top - bc->_regY;
-			}
-		}
-		break;
-	case kCastDigitalVideo:
-	case kCastFilmLoop:
-		result.x = _cast->_initialRect.width() >> 1;
-		result.y = _cast->_initialRect.height() >> 1;
-		break;
-	default:
-		break;
-	}
-	return result;
 }
 
 void Sprite::updateEditable() {

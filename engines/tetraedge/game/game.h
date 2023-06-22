@@ -61,6 +61,8 @@ public:
 
 	virtual bool changeWarp(const Common::String &zone, const Common::String &scene, bool fadeFlag) = 0;
 
+	void closeDialogs();
+
 	virtual void draw() = 0;
 	virtual void enter() = 0; // will load game if _loadName is set.
 	// Note: game uses ILayouts here..
@@ -101,6 +103,7 @@ public:
 	DocumentsBrowser &documentsBrowser() { return _documentsBrowser; }
 	bool entered() const { return _entered; }
 	bool running() const { return _running; }
+	void setRunning(bool val) { _running = val; }
 	bool luaShowOwnerError() const { return _luaShowOwnerError; }
 
 	bool _returnToMainMenu;
@@ -160,7 +163,7 @@ protected:
 	TeLuaScript _luaScript;
 	TeLuaContext _luaContext;
 	TeLuaScript _gameEnterScript;
-	TeMusic _music;
+	TeMusic _videoMusic;
 	Notifier _notifier;
 	DocumentsBrowser _documentsBrowser;
 

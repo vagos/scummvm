@@ -57,6 +57,8 @@ void Script::freeScript(const bool keepLocalsSegment) {
 	_synonyms.clear();
 	_numSynonyms = 0;
 
+	_codeOffset = 0;
+
 	_localsOffset = 0;
 	if (!keepLocalsSegment) {
 		_localsSegment = 0;
@@ -902,7 +904,12 @@ uint32 Script::validateExportFunc(int pubfunct, bool relocSci3) {
 #endif
 		offset = _exports.getUint16SEAt(pubfunct);
 
-	// TODO: Check if this should be done for SCI1.1 games as well
+	// SCI2 doesn't adjust export offsets to the code block when they're zero.
+	// Zero is supposed to signify that the export slot is empty. This leaves the
+	// offset pointing at the start of the code block, and several scripts rely
+	// on this. Script 64909's first export is zero but game scripts call this
+	// to shake the screen. This works because the function resides at the start
+	// of the code block.
 	if (getSciVersion() >= SCI_VERSION_2 && offset == 0) {
 		offset = getCodeBlockOffset();
 	}
@@ -1223,10 +1230,10 @@ void Script::initializeObjectsSci3(SegManager *segMan, SegmentId segmentId, bool
 void Script::initializeObjects(SegManager *segMan, SegmentId segmentId, bool applyScriptPatches) {
 	if (getSciVersion() <= SCI_VERSION_1_LATE)
 		initializeObjectsSci0(segMan, segmentId, applyScriptPatches);
-	else if (getSciVersion() >= SCI_VERSION_1_1 && getSciVersion() <= SCI_VERSION_2_1_LATE)
+	else if (getSciVersion() <= SCI_VERSION_2_1_LATE)
 		initializeObjectsSci11(segMan, segmentId, applyScriptPatches);
 #ifdef ENABLE_SCI32
-	else if (getSciVersion() == SCI_VERSION_3)
+	else
 		initializeObjectsSci3(segMan, segmentId, applyScriptPatches);
 #endif
 }
@@ -1288,10 +1295,6 @@ Common::Array<reg_t> Script::listObjectReferences() const {
 	}
 
 	return tmp;
-}
-
-bool Script::offsetIsObject(uint32 offset) const {
-	return _buf->getUint16SEAt(offset + SCRIPT_OBJECT_MAGIC_OFFSET) == SCRIPT_OBJECT_MAGIC_NUMBER;
 }
 
 void Script::applySaidWorkarounds() {

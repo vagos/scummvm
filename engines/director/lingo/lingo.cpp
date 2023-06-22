@@ -26,7 +26,6 @@
 
 #include "director/director.h"
 #include "director/cast.h"
-#include "director/castmember.h"
 #include "director/frame.h"
 #include "director/movie.h"
 #include "director/picture.h"
@@ -34,6 +33,8 @@
 #include "director/sprite.h"
 #include "director/window.h"
 #include "director/util.h"
+#include "director/castmember/castmember.h"
+#include "director/castmember/text.h"
 
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-ast.h"
@@ -156,18 +157,14 @@ LingoState::~LingoState() {
 		if (callstack[i]->retLocalVars)
 			delete callstack[i]->retLocalVars;
 		if (callstack[i]->retContext) {
-			*callstack[i]->retContext->_refCount -= 1;
-			if (*callstack[i]->retContext->_refCount == 0)
-				delete callstack[i]->retContext;
+			callstack[i]->retContext->decRefCount();
 		}
 		delete callstack[i];
 	}
 	if (localVars)
 		delete localVars;
 	if (context) {
-		*context->_refCount -= 1;
-		if (*context->_refCount == 0)
-			delete context;
+		context->decRefCount();
 	}
 
 }
@@ -250,25 +247,19 @@ LingoArchive::~LingoArchive() {
 	for (ScriptContextHash::iterator it = lctxContexts.begin(); it != lctxContexts.end(); ++it){
 		ScriptContext *script = it->_value;
 		if (script->getOnlyInLctxContexts()) {
-			*script->_refCount -= 1;
-			if (*script->_refCount <= 0)
-				delete script;
+			script->decRefCount();
 		}
 	}
 
 	for (int i = 0; i <= kMaxScriptType; i++) {
 		for (ScriptContextHash::iterator it = scriptContexts[i].begin(); it != scriptContexts[i].end(); ++it) {
-			*it->_value->_refCount -= 1;
-			if (*it->_value->_refCount <= 0)
-				delete it->_value;
+			it->_value->decRefCount();
 		}
 	}
 
-	for (auto it : factoryContexts) {
-		for (auto jt : *it._value) {
-			*jt._value->_refCount -= 1;
-			if (*jt._value->_refCount <= 0)
-				delete jt._value;
+	for (auto &it : factoryContexts) {
+		for (auto &jt : *it._value) {
+			jt._value->decRefCount();
 		}
 		delete it._value;
 	}
@@ -372,7 +363,7 @@ void LingoArchive::addCode(const Common::U32String &code, ScriptType type, uint1
 	ScriptContext *sc = g_lingo->_compiler->compileLingo(code, this, type, CastMemberID(id, cast->_castLibID), contextName, false, preprocFlags);
 	if (sc) {
 		scriptContexts[type][id] = sc;
-		*sc->_refCount += 1;
+		sc->incRefCount();
 	}
 }
 
@@ -381,10 +372,7 @@ void LingoArchive::removeCode(ScriptType type, uint16 id) {
 	if (!ctx)
 		return;
 
-	*ctx->_refCount -= 1;
-	if (*ctx->_refCount <= 0) {
-		delete ctx;
-	}
+	ctx->decRefCount();
 	scriptContexts[type].erase(id);
 }
 
@@ -796,6 +784,8 @@ int Lingo::getAlignedType(const Datum &d1, const Datum &d2, bool numsOnly) {
 		opType = INT;
 	} else if ((d1Type == STRING && d2Type == INT) || (d1Type == INT && d2Type == STRING)) {
 		opType = STRING;
+	} else if ((d1Type == STRING && d2Type == SYMBOL) || (d1Type == SYMBOL && d2Type == STRING)) {
+		opType = STRING;
 	}
 
 	return opType;
@@ -1181,7 +1171,7 @@ CastMemberID Datum::asMemberID(CastType castType) const {
 	if (type == CASTREF || type == FIELDREF)
 		return *u.cast;
 
-	return g_lingo->resolveCastMember(*this, 0, castType);
+	return g_lingo->resolveCastMember(*this, DEFAULT_CAST_LIB, castType);
 }
 
 Common::Point Datum::asPoint() const {
@@ -1203,6 +1193,14 @@ bool Datum::isVarRef() const {
 
 bool Datum::isCastRef() const {
 	return (type == CASTREF || type == FIELDREF);
+}
+
+bool Datum::isArray() const {
+	return (type == ARRAY || type == POINT || type == RECT);
+}
+
+bool Datum::isNumeric() const {
+	return (type == INT || type == FLOAT);
 }
 
 const char *Datum::type2str(bool ilk) const {
@@ -1379,7 +1377,7 @@ void Lingo::runTests() {
 
 			if (!debugChannelSet(-1, kDebugCompileOnly)) {
 				if (!_compiler->_hadError)
-					executeScript(kTestScript, CastMemberID(counter, 0));
+					executeScript(kTestScript, CastMemberID(counter, DEFAULT_CAST_LIB));
 				else
 					debug(">> Skipping execution");
 			}
@@ -1407,26 +1405,31 @@ void Lingo::executeImmediateScripts(Frame *frame) {
 }
 
 void Lingo::executePerFrameHook(int frame, int subframe) {
-	if (_vm->getVersion() < 400) {
-		if (_perFrameHook.type == OBJECT) {
-			Symbol method = _perFrameHook.u.obj->getMethod("mAtFrame");
-			if (method.type != VOIDSYM) {
-				debugC(1, kDebugLingoExec, "Executing perFrameHook : <%s>(mAtFrame, %d, %d)", _perFrameHook.asString(true).c_str(), frame, subframe);
-				push(_perFrameHook);
-				push(frame);
-				push(subframe);
-				LC::call(method, 3, false);
+	// Execute perFrameHook and actorList stepFrame, if any is available
+	// Starting D4, stepFrame of each objects in actorList is executed
+	// however the support for legacy mAtFrame is still there. (in future versions)
+	if (_perFrameHook.type == OBJECT) {
+		Symbol method = _perFrameHook.u.obj->getMethod("mAtFrame");
+		if (method.type != VOIDSYM) {
+			debugC(1, kDebugLingoExec, "Executing perFrameHook : <%s>(mAtFrame, %d, %d)", _perFrameHook.asString(true).c_str(), frame, subframe);
+			push(_perFrameHook);
+			push(frame);
+			push(subframe);
+			LC::call(method, 3, false);
+			execute();
+		}
+	}
+
+	if (_vm->getVersion() >= 400) {
+		if (_actorList.u.farr->arr.size() > 0 && _vm->getVersion() >= 400) {
+			for (uint i = 0; i < _actorList.u.farr->arr.size(); i++) {
+				Datum actor = _actorList.u.farr->arr[i];
+				Symbol method = actor.u.obj->getMethod("stepFrame");
+				if (method.nargs == 1)
+					push(actor);
+				LC::call(method, method.nargs, false);
 				execute();
 			}
-		}
-	} else if (_actorList.u.farr->arr.size() > 0) {
-		for (uint i = 0; i < _actorList.u.farr->arr.size(); i++) {
-			Datum actor = _actorList.u.farr->arr[i];
-			Symbol method = actor.u.obj->getMethod("stepFrame");
-			if (method.nargs == 1)
-				push(actor);
-			LC::call(method, method.nargs, false);
-			execute();
 		}
 	}
 }

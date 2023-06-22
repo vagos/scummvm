@@ -23,10 +23,14 @@
 // mikmod headers.
 #define FORBIDDEN_SYMBOL_EXCEPTION_FILE
 
-// On Windows, unlink and setjmp may also be triggered.
+// On Windows, unlink and setjmp/longjmp may also be triggered.
 #if defined(WIN32)
+#define FORBIDDEN_SYMBOL_EXCEPTION_chdir
+#define FORBIDDEN_SYMBOL_EXCEPTION_getcwd
+#define FORBIDDEN_SYMBOL_EXCEPTION_mkdir
 #define FORBIDDEN_SYMBOL_EXCEPTION_unlink
 #define FORBIDDEN_SYMBOL_EXCEPTION_setjmp
+#define FORBIDDEN_SYMBOL_EXCEPTION_longjmp
 #endif
 
 #include "audio/mods/impulsetracker.h"

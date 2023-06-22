@@ -119,7 +119,7 @@ void EditableWidget::handleTickle() {
 void EditableWidget::handleMouseDown(int x, int y, int button, int clickCount) {
 	if (!isEnabled())
 		return;
-	
+
 	_isDragging = true;
 	// Select all text incase of double press
 	if (clickCount > 1) {
@@ -129,7 +129,7 @@ void EditableWidget::handleMouseDown(int x, int y, int button, int clickCount) {
 		markAsDirty();
 		return;
 	}
-	
+
 	// Clear any selection
 	if (_selOffset != 0 && !_shiftPressed)
 		clearSelection();
@@ -266,7 +266,7 @@ bool EditableWidget::handleKeyDown(Common::KeyState state) {
 		} else if (deleteIndex >= 0 && _selOffset != 0) {
 			int selBegin = _selCaretPos;
 			int selEnd = _selCaretPos + _selOffset;
-			if (selBegin > selEnd) 
+			if (selBegin > selEnd)
 				SWAP(selBegin, selEnd);
 			_editString.erase(selBegin, selEnd - selBegin);
 			setCaretPos(caretVisualPos(selBegin));
@@ -360,7 +360,7 @@ bool EditableWidget::handleKeyDown(Common::KeyState state) {
 				if (_selOffset != 0) {
 					int selBegin = _selCaretPos;
 					int selEnd = _selCaretPos + _selOffset;
-					if (selBegin > selEnd) 
+					if (selBegin > selEnd)
 						SWAP(selBegin, selEnd);
 					_editString.replace(selBegin, selEnd - selBegin, text);
 					setCaretPos(caretVisualPos(selBegin));
@@ -424,7 +424,10 @@ bool EditableWidget::handleKeyDown(Common::KeyState state) {
 			}
 			clearSelection();
 			break;
+		} else {
+			defaultKeyDownHandler(state, dirty, forcecaret, handled);
 		}
+		break;
 #endif
 
 	default:
@@ -446,7 +449,7 @@ void EditableWidget::defaultKeyDownHandler(Common::KeyState &state, bool &dirty,
 		if (_selCaretPos >= 0) {
 			int selBegin = _selCaretPos;
 			int selEnd = _selCaretPos + _selOffset;
-			if (selBegin > selEnd) 
+			if (selBegin > selEnd)
 				SWAP(selBegin, selEnd);
 			_editString.replace(selBegin, selEnd - selBegin, Common::U32String(state.ascii));
 			if(_editString.size() > 0)
@@ -541,11 +544,16 @@ void EditableWidget::drawCaret(bool erase) {
 		// EditTextWidget uses that but not ListWidget. Thus, one should check
 		// whether we can unify the drawing in the text area first to avoid
 		// possible glitches due to different methods used.
-		_inversion = (_selOffset < 0) ? ThemeEngine::kTextInversionFocus : ThemeEngine::kTextInversionNone;
+
+		ThemeEngine::TextInversionState inversion = _inversion;
+
+		if (!_disableSelection)
+			inversion = (_selOffset < 0) ? ThemeEngine::kTextInversionFocus : ThemeEngine::kTextInversionNone;
+
 		width = MIN(editRect.width() - caretOffset, width);
 		if (width > 0) {
 			g_gui.theme()->drawText(Common::Rect(x, y, x + width, y + editRect.height()), character,
-			                        _state, _drawAlign, _inversion, 0, false, _font,
+			                        _state, _drawAlign, inversion, 0, false, _font,
 			                        ThemeEngine::kFontColorNormal, true, _textDrawableArea);
 		}
 	}

@@ -59,7 +59,6 @@ AQCallbackStruct OSystem_iOS7::s_AudioQueue;
 SoundProc OSystem_iOS7::s_soundCallback = NULL;
 void *OSystem_iOS7::s_soundParam = NULL;
 
-#ifdef IPHONE_SANDBOXED
 class SandboxedSaveFileManager : public DefaultSaveFileManager {
 	Common::String _sandboxRootPath;
 public:
@@ -84,32 +83,26 @@ public:
 		}
 	}
 };
-#endif
 
 OSystem_iOS7::OSystem_iOS7() :
 	_mixer(NULL), _lastMouseTap(0), _queuedEventTime(0),
 	_mouseNeedTextureUpdate(false), _secondaryTapped(false), _lastSecondaryTap(0),
-	_screenOrientation(kScreenOrientationFlippedLandscape), _mouseClickAndDragEnabled(false),
-	_gestureStartX(-1), _gestureStartY(-1), _fullScreenIsDirty(false), _fullScreenOverlayIsDirty(false),
+	_screenOrientation(kScreenOrientationFlippedLandscape),
+	_fullScreenIsDirty(false), _fullScreenOverlayIsDirty(false),
 	_mouseDirty(false), _timeSuspended(0), _lastDragPosX(-1), _lastDragPosY(-1), _screenChangeCount(0),
 	_mouseCursorPaletteEnabled(false), _gfxTransactionError(kTransactionSuccess) {
 	_queuedInputEvent.type = Common::EVENT_INVALID;
-	_touchpadModeEnabled = !iOS7_isBigDevice();
-#ifdef IPHONE_SANDBOXED
+	_touchpadModeEnabled = ConfMan.getBool("touchpad_mode");
+	_mouseClickAndDragEnabled = ConfMan.getBool("clickanddrag_mode");
+
 	_chrootBasePath = iOS7_getDocumentsDir();
 	ChRootFilesystemFactory *chFsFactory = new ChRootFilesystemFactory(_chrootBasePath);
 	_fsFactory = chFsFactory;
 	// Add virtual drive for bundle path
-	CFURLRef fileUrl = CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle());
-	if (fileUrl) {
-		UInt8 buf[MAXPATHLEN];
-		if (CFURLGetFileSystemRepresentation(fileUrl, true, buf, sizeof(buf)))
-			chFsFactory->addVirtualDrive("appbundle:", Common::String((const char *)buf));
-		CFRelease(fileUrl);
-	}
-#else
-	_fsFactory = new POSIXFilesystemFactory();
-#endif
+	Common::String appBubdlePath = iOS7_getAppBundleDir();
+	if (!appBubdlePath.empty())
+		chFsFactory->addVirtualDrive("appbundle:", appBubdlePath);
+
 	initVideoContext();
 
 	memset(_gamePalette, 0, sizeof(_gamePalette));
@@ -146,11 +139,7 @@ int OSystem_iOS7::timerHandler(int t) {
 }
 
 void OSystem_iOS7::initBackend() {
-#ifdef IPHONE_SANDBOXED
 	_savefileManager = new SandboxedSaveFileManager(_chrootBasePath, "/Savegames");
-#else
-	_savefileManager = new DefaultSaveFileManager(SCUMMVM_SAVE_PATH);
-#endif
 
 	_timerManager = new DefaultTimerManager();
 
@@ -173,6 +162,7 @@ bool OSystem_iOS7::hasFeature(Feature f) {
 #endif
 	case kFeatureOpenUrl:
 	case kFeatureNoQuit:
+	case kFeatureKbdMouseSpeed:
 		return true;
 
 	default:
@@ -312,16 +302,40 @@ void OSystem_iOS7::delayMillis(uint msecs) {
 	usleep(msecs * 1000);
 }
 
+float OSystem_iOS7::getMouseSpeed() {
+	switch (ConfMan.getInt("kbdmouse_speed")) {
+	case 0:
+		return 0.25;
+	case 1:
+		return 0.5;
+	case 2:
+		return 0.75;
+	case 3:
+		return 1.0;
+	case 4:
+		return 1.25;
+	case 5:
+		return 1.5;
+	case 6:
+		return 1.75;
+	case 7:
+		return 2.0;
+	default:
+		return 1.0;
+	}
+}
 
 void OSystem_iOS7::setTimerCallback(TimerProc callback, int interval) {
 	//printf("setTimerCallback()\n");
+	dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+	dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
 
-	if (callback != NULL) {
-		_timerCallbackTimer = interval;
-		_timerCallbackNext = getMillis() + interval;
-		_timerCallback = callback;
-	} else
-		_timerCallback = NULL;
+	if (timer)
+	{
+		dispatch_source_set_timer(timer, dispatch_walltime(NULL, 0), interval * NSEC_PER_MSEC, interval * NSEC_PER_MSEC / 10);
+		dispatch_source_set_event_handler(timer, ^{ callback(interval); });
+		dispatch_resume(timer);
+	}
 }
 
 Common::MutexInternal *OSystem_iOS7::createMutex() {
@@ -354,12 +368,8 @@ OSystem_iOS7 *OSystem_iOS7::sharedInstance() {
 }
 
 Common::String OSystem_iOS7::getDefaultConfigFileName() {
-#ifdef IPHONE_SANDBOXED
 	Common::String path = "/Preferences";
 	return path;
-#else
-	return SCUMMVM_PREFS_PATH;
-#endif
 }
 
 void OSystem_iOS7::addSysArchivesToSearchSet(Common::SearchSet &s, int priority) {
@@ -371,12 +381,8 @@ void OSystem_iOS7::addSysArchivesToSearchSet(Common::SearchSet &s, int priority)
 		if (CFURLGetFileSystemRepresentation(fileUrl, true, buf, sizeof(buf))) {
 			// Success: Add it to the search path
 			Common::String bundlePath((const char *)buf);
-#ifdef IPHONE_SANDBOXED
 			POSIXFilesystemNode *posixNode = new POSIXFilesystemNode(bundlePath);
 			s.add("__IOS_BUNDLE__", new Common::FSDirectory(AbstractFSNode::makeFSNode(posixNode)), priority);
-#else
-			s.add("__IOS_BUNDLE__", new Common::FSDirectory(bundlePath), priority);
-#endif
 		}
 		CFRelease(fileUrl);
 	}
@@ -395,27 +401,33 @@ void iOS7_main(int argc, char **argv) {
 
 	//OSystem_iOS7::migrateApp();
 
-	FILE *newfp = fopen("/var/mobile/.scummvm.log", "a");
-	if (newfp != NULL) {
-		fclose(stdout);
-		fclose(stderr);
-		*stdout = *newfp;
-		*stderr = *newfp;
-		setbuf(stdout, NULL);
-		setbuf(stderr, NULL);
+	Common::String logFilePath = iOS7_getDocumentsDir() + "/scummvm.log";
+	FILE *logFile = fopen(logFilePath.c_str(), "a");
+	if (logFile != nullptr) {
+		// We check for log file size; if it's too big, we rewrite it.
+		// This happens only upon app launch
+		// NOTE: We don't check for file size each time we write a log message.
+		long sz = ftell(logFile);
+		if (sz > MAX_IOS7_SCUMMVM_LOG_FILESIZE_IN_BYTES) {
+			fclose(logFile);
+			fprintf(stdout, "Default log file is bigger than %dKB. It will be overwritten!", MAX_IOS7_SCUMMVM_LOG_FILESIZE_IN_BYTES / 1024);
 
-		//extern int gDebugLevel;
-		//gDebugLevel = 10;
+			// Create the log file from scratch overwriting the previous one
+			logFile = fopen(logFilePath.c_str(), "w");
+			if (logFile == nullptr)
+				fprintf(stdout, "Could not open default log file for rewrite!");
+		}
+		if (logFile != NULL) {
+			fclose(stdout);
+			fclose(stderr);
+			*stdout = *logFile;
+			*stderr = *logFile;
+			setbuf(stdout, NULL);
+			setbuf(stderr, NULL);
+		}
 	}
 
-#ifdef IPHONE_SANDBOXED
-	chdir(iOS7_getDocumentsDir());
-#else
-	system("mkdir " SCUMMVM_ROOT_PATH);
-	system("mkdir " SCUMMVM_SAVE_PATH);
-
-	chdir("/var/mobile/");
-#endif
+	chdir(iOS7_getDocumentsDir().c_str());
 
 	g_system = OSystem_iOS7::sharedInstance();
 	assert(g_system);
@@ -424,9 +436,9 @@ void iOS7_main(int argc, char **argv) {
 	scummvm_main(argc, (const char *const *) argv);
 	g_system->quit();       // TODO: Consider removing / replacing this!
 
-	if (newfp != NULL) {
+	if (logFile != NULL) {
 		//*stdout = NULL;
 		//*stderr = NULL;
-		fclose(newfp);
+		fclose(logFile);
 	}
 }

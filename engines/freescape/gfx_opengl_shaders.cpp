@@ -73,6 +73,12 @@ void OpenGLShaderRenderer::freeTexture(Texture *texture) {
 	delete texture;
 }
 
+Common::Point OpenGLShaderRenderer::nativeResolution() {
+	GLint vect[4];
+	glGetIntegerv(GL_VIEWPORT, vect);
+	return Common::Point(vect[2], vect[3]);
+}
+
 void OpenGLShaderRenderer::init() {
 	computeScreenViewport();
 
@@ -316,15 +322,8 @@ void OpenGLShaderRenderer::useColor(uint8 r, uint8 g, uint8 b) {
 	_triangleShader->setUniform("color", color);
 }
 
-void OpenGLShaderRenderer::clear(uint8 color) {
-	uint8 r, g, b;
-
-	if (_colorRemaps && _colorRemaps->contains(color)) {
-		color = (*_colorRemaps)[color];
-	}
-
-	readFromPalette(color, r, g, b);
-	glClearColor(0, 0, 0, 1.0);
+void OpenGLShaderRenderer::clear(uint8 r, uint8 g, uint8 b) {
+	glClearColor(r / 255., g / 255., b / 255., 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 

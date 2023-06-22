@@ -22,8 +22,6 @@
 #ifndef NANCY_ACTION_RECORDTYPES_H
 #define NANCY_ACTION_RECORDTYPES_H
 
-#include "engines/nancy/renderobject.h"
-
 #include "engines/nancy/action/actionrecord.h"
 
 namespace Nancy {
@@ -55,6 +53,7 @@ public:
 	Common::Array<HotspotDescription> _hotspots;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "HotMultiframeSceneChange"; }
 };
 
@@ -66,6 +65,7 @@ public:
 	HotspotDescription _hotspotDesc;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "Hot1FrSceneChange"; }
 };
 
@@ -89,6 +89,7 @@ public:
 	Common::Array<HotspotDescription> _hotspots;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "HotMultiframeMultisceneChange"; }
 };
 
@@ -130,6 +131,19 @@ protected:
 	Common::String getRecordTypeName() const override { return "LightningOn"; }
 };
 
+class SpecialEffect : public ActionRecord {
+public:
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	byte _type = 1;
+	uint16 _fadeToBlackTime = 0;
+	uint16 _frameTime = 0;
+
+protected:
+	Common::String getRecordTypeName() const override { return "SpecialEffect"; }
+};
+
 class MapCall : public ActionRecord {
 public:
 	void readData(Common::SeekableReadStream &stream) override;
@@ -149,6 +163,7 @@ public:
 	HotspotDescription _hotspotDesc;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "MapCallHot1Fr"; }
 };
 
@@ -160,12 +175,18 @@ public:
 	Common::Array<HotspotDescription> _hotspots;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "MapCallHotMultiframe"; }
 };
 
-class TextBoxWrite : public Unimplemented {
+class TextBoxWrite : public ActionRecord {
 public:
+	virtual ~TextBoxWrite();
+
 	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	Common::String _text;
 
 protected:
 	Common::String getRecordTypeName() const override { return "TextBoxWrite"; }
@@ -254,6 +275,7 @@ public:
 	Common::Array<HotspotDescription> _hotspots;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "EventFlagsMultiHS"; }
 };
 
@@ -327,16 +349,15 @@ protected:
 	Common::String getRecordTypeName() const override { return "DifficultyLevel"; }
 };
 
-class ShowInventoryItem : public ActionRecord, public RenderObject {
+class ShowInventoryItem : public RenderActionRecord {
 public:
 	void readData(Common::SeekableReadStream &stream) override;
 	void execute() override;
 
-	ShowInventoryItem() : RenderObject(9) {}
+	ShowInventoryItem() : RenderActionRecord(9) {}
 	virtual ~ShowInventoryItem() { _fullSurface.free(); }
 
 	void init() override;
-	void onPause(bool pause) override;
 
 	uint16 _objectID = 0;
 	Common::String _imageName;
@@ -346,6 +367,7 @@ public:
 	Graphics::ManagedSurface _fullSurface;
 
 protected:
+	bool canHaveHotspot() const override { return true; }
 	Common::String getRecordTypeName() const override { return "ShowInventoryItem"; }
 	bool isViewportRelative() const override { return true; }
 };
@@ -386,6 +408,18 @@ public:
 
 protected:
 	Common::String getRecordTypeName() const override { return "PlaySoundMultiHS"; }
+};
+
+class StopSound : public ActionRecord {
+public:
+	void readData(Common::SeekableReadStream &stream) override;
+	void execute() override;
+
+	uint _channelID;
+	SceneChangeWithFlag _sceneChange;
+
+protected:
+	Common::String getRecordTypeName() const override { return "StopSound"; }
 };
 
 class HintSystem : public ActionRecord {

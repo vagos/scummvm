@@ -27,6 +27,7 @@
 #include "engines/nancy/graphics.h"
 #include "engines/nancy/renderobject.h"
 #include "engines/nancy/resource.h"
+#include "engines/nancy/cursor.h"
 #include "engines/nancy/state/scene.h"
 
 namespace Nancy {
@@ -35,7 +36,8 @@ GraphicsManager::GraphicsManager() :
 	_objects(objectComparator),
 	_inputPixelFormat(2, 5, 5, 5, 0, 10, 5, 0, 0),
 	_screenPixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0),
-	_clut8Format(Graphics::PixelFormat::createFormatCLUT8()) {}
+	_clut8Format(Graphics::PixelFormat::createFormatCLUT8()),
+	_isSuppressed(false) {}
 
 void GraphicsManager::init() {
 	initGraphics(640, 480, &_screenPixelFormat);
@@ -46,7 +48,13 @@ void GraphicsManager::init() {
 	g_nancy->_resource->loadImage(g_nancy->_imageChunks["OB0"].imageName, _object0);
 }
 
-void GraphicsManager::draw() {
+void GraphicsManager::draw(bool updateScreen) {
+	if (_isSuppressed) {
+		_isSuppressed = false;
+		return;
+	}
+
+	g_nancy->_cursorManager->applyCursor();
 	Common::List<Common::Rect> dirtyRects;
 
 	// Update graphics for all RenderObjects and determine
@@ -101,7 +109,9 @@ void GraphicsManager::draw() {
 	}
 
 	// Draw the screen
-	_screen.update();
+	if (updateScreen) {
+		_screen.update();
+	}
 }
 
 void GraphicsManager::loadFonts(Common::SeekableReadStream *chunkStream) {
@@ -147,6 +157,10 @@ void GraphicsManager::redrawAll() {
 	for (auto &obj : _objects) {
 		obj->_needsRedraw = true;
 	}
+}
+
+void GraphicsManager::suppressNextDraw() {
+	_isSuppressed = true;
 }
 
 void GraphicsManager::loadSurfacePalette(Graphics::ManagedSurface &inSurf, const Common::String paletteFilename, uint paletteStart, uint paletteSize) {
@@ -251,6 +265,68 @@ void GraphicsManager::copyToManaged(void *src, Graphics::ManagedSurface &dst, ui
 	copyToManaged(surf, dst, verticalFlip, doubleSize);
 }
 
+// Custom rotation code since Surface::rotoscale() produces incorrect results
+// Only works on 16 bit square surfaces with the same size, and ignores transparency
+// Rotation is a value between 0 and 3, corresponding to 0, 90, 180, or 270 degrees clockwise
+void GraphicsManager::rotateBlit(const Graphics::ManagedSurface &src, Graphics::ManagedSurface &dest, byte rotation) {
+	assert(!src.empty() && !dest.empty());
+	assert(src.w == src.h && src.h == dest.w && dest.w == dest.h);
+	assert(rotation >= 0 && rotation <= 3);
+	assert(src.format.bytesPerPixel == 2 && dest.format.bytesPerPixel == 2);
+
+	uint size = src.w;
+	const uint16 *s, *e;
+
+	switch (rotation) {
+	case 0 :
+		// No rotation, just blit
+		dest.rawBlitFrom(src, src.getBounds(), Common::Point());
+		return;
+	case 2 : {
+		// 180 degrees
+		uint16 *d;
+		for (uint y = 0; y < size; ++y) {
+			s = (const uint16 *)src.getBasePtr(0, y);
+			e = (const uint16 *)src.getBasePtr(size - 1, y);
+			d = (uint16 *)dest.getBasePtr(size - 1, size - y - 1);
+			for (; s < e; ++s, --d) {
+				*d = *s;
+			}
+		}
+
+		break;
+	}
+	case 1 :
+		// 90 degrees
+		for (uint y = 0; y < size; ++y) {
+			s = (const uint16 *)src.getBasePtr(0, y);
+			e = (const uint16 *)src.getBasePtr(size - 1, y);
+			for (uint x = 0; x < size; ++x, ++s) {
+				*((uint16 *)dest.getBasePtr(size - y - 1, x)) = *s;
+			}
+		}
+
+		break;
+	case 3 :
+		// 270 degrees
+		for (uint y = 0; y < size; ++y) {
+			s = (const uint16 *)src.getBasePtr(0, y);
+			e = (const uint16 *)src.getBasePtr(size - 1, y);
+			for (uint x = 0; x < size; ++x, ++s) {
+				*((uint16 *)dest.getBasePtr(y, size - x - 1)) = *s;
+			}
+		}
+
+		break;
+	}
+}
+
+void GraphicsManager::crossDissolve(const Graphics::ManagedSurface &from, const Graphics::ManagedSurface &to, byte alpha, Graphics::ManagedSurface &inResult) {
+	assert(from.getBounds() == to.getBounds() && to.getBounds() == inResult.getBounds());
+	inResult.blitFrom(from, Common::Point());
+	inResult.transBlitFrom(to, -1, false, 0, alpha);
+}
+
 void GraphicsManager::debugDrawToScreen(const Graphics::ManagedSurface &surf) {
 	_screen.blitFrom(surf, Common::Point());
 	_screen.update();
@@ -286,6 +362,13 @@ void GraphicsManager::grabViewportObjects(Common::Array<RenderObject *> &inArray
 			inArray.push_back(obj);
 		}
 	}
+}
+
+void GraphicsManager::screenshotViewport(Graphics::ManagedSurface &inSurf) {
+	draw(false);
+	inSurf.free();
+	inSurf.create(g_nancy->_viewportData->bounds.width(), g_nancy->_viewportData->bounds.height(), _screenPixelFormat);
+	inSurf.blitFrom(_screen, g_nancy->_viewportData->screenPosition, g_nancy->_viewportData->bounds);
 }
 
 // Draw a given screen-space rectangle to the screen

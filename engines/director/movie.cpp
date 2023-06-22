@@ -73,7 +73,7 @@ Movie::Movie(Window *window) {
 
 	_movieArchive = nullptr;
 
-	_cast = new Cast(this, 0);
+	_cast = new Cast(this, DEFAULT_CAST_LIB);
 	_casts.setVal(_cast->_castLibID, _cast);
 	_sharedCast = nullptr;
 	_score = new Score(this);
@@ -95,12 +95,7 @@ Movie::Movie(Window *window) {
 }
 
 Movie::~Movie() {
-	// _movieArchive is shared with the cast, so the cast will free it
 	delete _cast;
-
-	if (_sharedCast)
-		g_director->_allOpenResFiles.erase(_sharedCast->getArchive()->getPathName());
-
 	delete _sharedCast;
 	delete _score;
 }
@@ -114,13 +109,67 @@ void Movie::setArchive(Archive *archive) {
 		_macName = archive->getFileName();
 	}
 
-	_cast->setArchive(archive);
+	Common::SeekableReadStreamEndian *r = nullptr;
+	if ((r = archive->getMovieResourceIfPresent(MKTAG('M', 'C', 's', 'L'))) != nullptr) {
+		// D5 archive, can contain multiple internal/external casts
+		loadCastLibMapping(*r);
+	} else {
+		// D4 or lower, only 1 cast
+		_cast->setArchive(archive);
+	}
 
 	// Frame Labels
-	if (Common::SeekableReadStreamEndian *r = archive->getMovieResourceIfPresent(MKTAG('V', 'W', 'L', 'B'))) {
+	if ((r = archive->getMovieResourceIfPresent(MKTAG('V', 'W', 'L', 'B')))) {
 		_score->loadLabels(*r);
 		delete r;
 	}
+}
+
+void Movie::loadCastLibMapping(Common::SeekableReadStreamEndian &stream) {
+	debugC(5, kDebugLoading, "Movie::loadCastLibMapping: loading cast libraries");
+	if (debugChannelSet(8, kDebugLoading)) {
+		stream.hexdump(stream.size());
+	}
+	stream.readUint32(); // header size
+	uint32 count = stream.readUint32();
+	stream.readUint16();
+	uint32 unkCount = stream.readUint32() + 1;
+	for (uint32 i = 0; i < unkCount; i++) {
+		stream.readUint32();
+	}
+	for (uint32 i = 0; i < count; i++) {
+		int nameSize = stream.readByte();
+		Common::String name = stream.readString('\0', nameSize);
+		stream.readByte(); // null
+		int pathSize = stream.readByte();
+		Common::String path = stream.readString('\0', pathSize);
+		stream.readByte(); // null
+		if (pathSize > 1)
+			stream.readUint16();
+		stream.readUint16();
+		uint16 itemCount = stream.readUint16();
+		stream.readUint16();
+		uint16 libId = stream.readUint16() - CAST_LIB_OFFSET;
+		debugC(5, kDebugLoading, "Movie::loadCastLibMapping: name: %s, path: %s, itemCount: %d, libId: %d", utf8ToPrintable(name).c_str(), utf8ToPrintable(path).c_str(), itemCount, libId);
+		Archive *castArchive = _movieArchive;
+		bool isExternal = !path.empty();
+		if (isExternal) {
+			castArchive = loadExternalCastFrom(pathMakeRelative(path));
+			if (!castArchive) {
+				continue;	// couldn't load external cast
+			}
+		}
+
+		Cast *cast = nullptr;
+		if (_casts.contains(libId)) {
+			cast = _casts.getVal(libId);
+		} else {
+			cast = new Cast(this, libId, false, isExternal);
+			_casts.setVal(libId, cast);
+		}
+		cast->setArchive(castArchive);
+	}
+	return;
 }
 
 bool Movie::loadArchive() {
@@ -133,6 +182,8 @@ bool Movie::loadArchive() {
 	_version = _cast->_version;
 	_platform = _cast->_platform;
 	_movieRect = _cast->_movieRect;
+	_score->_currentFrameRate = _cast->_frameRate;
+	_stageColor = _vm->transformColor(_cast->_stageColor);
 	// Wait to handle _stageColor until palette is loaded in loadCast...
 
 	// File Info
@@ -142,14 +193,18 @@ bool Movie::loadArchive() {
 	}
 
 	// Cast
-	_cast->loadCast();
+	for (auto &it : _casts) {
+		if (it._value != _cast)
+			it._value->loadConfig();
+		it._value->loadCast();
+	}
 	_stageColor = _vm->transformColor(_cast->_stageColor);
 
 	bool recenter = false;
 	// If the stage dimensions are different, delete it and start again.
 	// Otherwise, do not clear it so there can be a nice transition.
 	if (_window->getSurface()->w != _movieRect.width() || _window->getSurface()->h != _movieRect.height()) {
-		_window->resize(_movieRect.width(), _movieRect.height(), true);
+		_window->resizeInner(_movieRect.width(), _movieRect.height());
 		recenter = true;
 	}
 
@@ -288,22 +343,17 @@ void Movie::clearSharedCast() {
 	if (!_sharedCast)
 		return;
 
-	g_director->_allOpenResFiles.erase(_sharedCast->getArchive()->getPathName());
-
 	delete _sharedCast;
-
 	_sharedCast = nullptr;
 }
 
 void Movie::loadSharedCastsFrom(Common::String filename) {
 	clearSharedCast();
 
-	Archive *sharedCast = _vm->createArchive();
+	Archive *sharedCast = _vm->openArchive(filename);
 
-	if (!sharedCast->openFile(filename)) {
+	if (!sharedCast) {
 		warning("loadSharedCastsFrom(): No shared cast %s", filename.c_str());
-
-		delete sharedCast;
 
 		return;
 	}
@@ -313,12 +363,25 @@ void Movie::loadSharedCastsFrom(Common::String filename) {
 	debug(0, "@@@@   Loading shared cast '%s'", filename.c_str());
 	debug(0, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
 
-	_sharedCast = new Cast(this, 0, true);
+	_sharedCast = new Cast(this, DEFAULT_CAST_LIB, true, false);
 	_sharedCast->setArchive(sharedCast);
 	_sharedCast->loadArchive();
+}
 
-	// Register the resfile so that Cursor::readFromResource can find it
-	g_director->_allOpenResFiles.setVal(sharedCast->getPathName(), sharedCast);
+Archive *Movie::loadExternalCastFrom(Common::String filename) {
+	Archive *externalCast = _vm->openArchive(filename);
+
+	if (!externalCast) {
+		warning("Movie::loadExternalCastFrom(): Cast file %s not found", filename.c_str());
+
+		return nullptr;
+	}
+
+	debug(0, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+	debug(0, "@@@@   Loading external cast '%s'", filename.c_str());
+	debug(0, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+
+	return externalCast;
 }
 
 CastMember *Movie::getCastMember(CastMemberID memberID) {
@@ -328,7 +391,7 @@ CastMember *Movie::getCastMember(CastMemberID memberID) {
 		if (result == nullptr && _sharedCast) {
 			result = _sharedCast->getCastMember(memberID.member);
 		}
-	} else {
+	} else if (memberID.castLib != 0) {
 		warning("Movie::getCastMember: Unknown castLib %d", memberID.castLib);
 	}
 	return result;
@@ -393,7 +456,7 @@ const Stxt *Movie::getStxt(CastMemberID memberID) {
 }
 
 LingoArchive *Movie::getMainLingoArch() {
-	return _casts.getVal(0)->_lingoArchive;
+	return _casts.getVal(DEFAULT_CAST_LIB)->_lingoArchive;
 }
 
 LingoArchive *Movie::getSharedLingoArch() {
@@ -407,7 +470,7 @@ ScriptContext *Movie::getScriptContext(ScriptType type, CastMemberID id) {
 		if (result == nullptr && _sharedCast) {
 			result = _sharedCast->_lingoArchive->getScriptContext(type, id.member);
 		}
-	} else {
+	} else if (!id.isNull()) {
 		warning("Movie::getScriptContext: Unknown castLib %d", id.castLib);
 	}
 	return result;

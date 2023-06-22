@@ -206,6 +206,17 @@ void LightningOn::readData(Common::SeekableReadStream &stream) {
 	stream.skip(4);
 }
 
+void SpecialEffect::readData(Common::SeekableReadStream &stream) {
+	_type = stream.readByte();
+	_fadeToBlackTime = stream.readUint16LE();
+	_frameTime = stream.readUint16LE();
+}
+
+void SpecialEffect::execute() {
+	NancySceneState.specialEffect(_type, _fadeToBlackTime, _frameTime);
+	_isDone = true;
+}
+
 void LightningOn::execute() {
 	NancySceneState.beginLightning(_distance, _pulseTime, _rgbPercent);
 	_isDone = true;
@@ -273,11 +284,33 @@ void MapCallHotMultiframe::execute() {
 
 void TextBoxWrite::readData(Common::SeekableReadStream &stream) {
 	uint16 size = stream.readUint16LE();
-	stream.skip(size);
 
 	if (size > 10000) {
 		error("Action Record atTextboxWrite has too many text box chars: %d", size);
 	}
+
+	char *buf = new char[size];
+	stream.read(buf, size);
+	buf[size - 1] = '\0';
+
+	UI::Textbox::assembleTextLine(buf, _text, size);
+
+	delete[] buf;
+}
+
+TextBoxWrite::~TextBoxWrite() {
+	NancySceneState.setShouldClearTextbox(true);
+	NancySceneState.getTextbox().setVisible(false);
+}
+
+void TextBoxWrite::execute() {
+	auto &tb = NancySceneState.getTextbox();
+	tb.clear();
+	tb.overrideFontID(g_nancy->_textboxData->defaultFontID);
+	tb.addTextLine(_text);
+	tb.setVisible(true);
+	NancySceneState.setShouldClearTextbox(false);
+	finishExecution();
 }
 
 void TextBoxClear::readData(Common::SeekableReadStream &stream) {
@@ -427,7 +460,7 @@ void AddInventoryNoHS::readData(Common::SeekableReadStream &stream) {
 }
 
 void AddInventoryNoHS::execute() {
-	if (NancySceneState.hasItem(_itemID) == kInvEmpty) {
+	if (NancySceneState.hasItem(_itemID) == g_nancy->_false) {
 		NancySceneState.addItemToInventory(_itemID);
 	}
 
@@ -439,7 +472,7 @@ void RemoveInventoryNoHS::readData(Common::SeekableReadStream &stream) {
 }
 
 void RemoveInventoryNoHS::execute() {
-	if (NancySceneState.hasItem(_itemID) == kInvHolding) {
+	if (NancySceneState.hasItem(_itemID) == g_nancy->_true) {
 		NancySceneState.removeItemFromInventory(_itemID, false);
 	}
 
@@ -472,9 +505,8 @@ void ShowInventoryItem::readData(Common::SeekableReadStream &stream) {
 
 	uint16 numFrames = stream.readUint16LE();
 
-	_bitmaps.reserve(numFrames);
+	_bitmaps.resize(numFrames);
 	for (uint i = 0; i < numFrames; ++i) {
-		_bitmaps.push_back(BitmapDescription());
 		_bitmaps[i].readData(stream);
 	}
 }
@@ -523,14 +555,8 @@ void ShowInventoryItem::execute() {
 	}
 }
 
-void ShowInventoryItem::onPause(bool pause) {
-	if (!pause) {
-		registerGraphics();
-	}
-}
-
 void PlayDigiSoundAndDie::readData(Common::SeekableReadStream &stream) {
-	_sound.read(stream, SoundDescription::kDIGI);
+	_sound.readDIGI(stream);
 	_sceneChange.readData(stream, g_nancy->getGameType() == kGameTypeVampire);
 
 	_flagOnTrigger.label = stream.readSint16LE();
@@ -565,7 +591,7 @@ void PlayDigiSoundAndDie::execute() {
 }
 
 void PlaySoundPanFrameAnchorAndDie::readData(Common::SeekableReadStream &stream) {
-	_sound.read(stream, SoundDescription::kDIGI);
+	_sound.readDIGI(stream);
 	stream.skip(2);
 }
 
@@ -576,7 +602,7 @@ void PlaySoundPanFrameAnchorAndDie::execute() {
 }
 
 void PlaySoundMultiHS::readData(Common::SeekableReadStream &stream) {
-	_sound.read(stream, SoundDescription::kNormal);
+	_sound.readNormal(stream);
 
 	if (g_nancy->getGameType() != kGameTypeVampire) {
 		_sceneChange.readData(stream);
@@ -627,9 +653,19 @@ void PlaySoundMultiHS::execute() {
 	}
 }
 
+void StopSound::readData(Common::SeekableReadStream &stream) {
+	_channelID = stream.readUint16LE();
+	_sceneChange.readData(stream);
+}
+
+void StopSound::execute() {
+	g_nancy->_sound->stopSound(_channelID);
+	_sceneChange.execute();
+}
+
 void HintSystem::readData(Common::SeekableReadStream &stream) {
 	_characterID = stream.readByte();
-	_genericSound.read(stream, SoundDescription::kNormal);
+	_genericSound.readNormal(stream);
 }
 
 void HintSystem::execute() {

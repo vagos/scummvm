@@ -35,7 +35,7 @@
 #include "director/channel.h"
 #include "director/sprite.h"
 #include "director/window.h"
-#include "director/castmember.h"
+#include "director/castmember/castmember.h"
 #include "director/lingo/lingo.h"
 
 namespace Director {
@@ -161,8 +161,12 @@ bool Movie::processEvent(Common::Event &event) {
 		if (_currentDraggedChannel) {
 			if (_currentDraggedChannel->_sprite->_moveable) {
 				pos = _window->getMousePos();
-
-				_currentDraggedChannel->addDelta(pos - _draggingSpritePos);
+				if (!_currentDraggedChannel->_sprite->_trails) {
+					g_director->getCurrentMovie()->getWindow()->addDirtyRect(_currentDraggedChannel->getBbox());
+				}
+				_currentDraggedChannel->setPosition(pos.x, pos.y, true);
+				_currentDraggedChannel->_dirty = true;
+				g_director->getCurrentMovie()->getWindow()->addDirtyRect(_currentDraggedChannel->getBbox());
 				_draggingSpritePos = pos;
 			} else {
 				_currentDraggedChannel = nullptr;

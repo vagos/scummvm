@@ -266,9 +266,7 @@ bool GuiManager::loadNewTheme(Common::String id, ThemeEngine::GraphicsMode gfx, 
 	// We need to redraw immediately. Otherwise
 	// some other event may cause a widget to be
 	// redrawn before redraw() has been called.
-	_redrawStatus = kRedrawFull;
-	redraw();
-	_system->updateScreen();
+	redrawFull();
 
 	return true;
 }
@@ -288,64 +286,23 @@ void GuiManager::displayTopDialogOnly(bool mode) {
 	redrawFull();
 }
 
-void GuiManager::redraw() {
-	ThemeEngine::ShadingStyle shading;
-
-	if (_dialogStack.empty())
-		return;
-
-	shading = (ThemeEngine::ShadingStyle)xmlEval()->getVar("Dialog." + _dialogStack.top()->_name + ".Shading", 0);
-
-	// Tanoku: Do not apply shading more than once when opening many dialogs
-	// on top of each other. Screen ends up being too dark and it's a
-	// performance hog.
-	if (_redrawStatus == kRedrawOpenDialog && _dialogStack.size() > 2)
-		shading = ThemeEngine::kShadingNone;
-
-	// Reset any custom RTL paddings set by stacked dialogs when we go back to the top
-	if (useRTL() && _dialogStack.size() == 1) {
-		setDialogPaddings(0, 0);
-	}
-
+void GuiManager::redrawInternalTopDialogOnly() {
+	// This is the simple case where only one dialog (the top one) is drawn on screen
 	switch (_redrawStatus) {
 		case kRedrawCloseDialog:
 		case kRedrawFull:
-		case kRedrawTopDialog:
+		case kRedrawOpenDialog:
+			// Clear everything
 			_theme->clearAll();
-			_theme->drawToBackbuffer();
-
-			if (!_displayTopDialogOnly) {
-				for (DialogStack::size_type i = 0; i < _dialogStack.size() - 1; i++) {
-					_dialogStack[i]->drawDialog(kDrawLayerBackground);
-					_dialogStack[i]->drawDialog(kDrawLayerForeground);
-				}
-			}
 
 			// fall through
 
-		case kRedrawOpenDialog:
-			// This case is an optimization to avoid redrawing the whole dialog
-			// stack when opening a new dialog.
-
-			if (_displayTopDialogOnly) {
-				// When displaying only the top dialog clear the screen
-				if (_redrawStatus == kRedrawOpenDialog) {
-					_theme->clearAll();
-					_theme->drawToBackbuffer();
-				}
-			} else {
-				_theme->drawToBackbuffer();
-
-				if (_redrawStatus == kRedrawOpenDialog && _dialogStack.size() > 1) {
-					Dialog *previousDialog = _dialogStack[_dialogStack.size() - 2];
-					previousDialog->drawDialog(kDrawLayerForeground);
-				}
-
-				_theme->applyScreenShading(shading);
-			}
-
+		case kRedrawTopDialog:
+			// Draw top dialog background on backbuffer
+			_theme->drawToBackbuffer();
 			_dialogStack.top()->drawDialog(kDrawLayerBackground);
 
+			// Copy just drawn background to screen and draw foreground
 			_theme->drawToScreen();
 			_theme->copyBackBufferToScreen();
 
@@ -353,12 +310,87 @@ void GuiManager::redraw() {
 			break;
 
 		default:
+			// Redraw only the widgets that are marked as dirty on screen
+			_theme->drawToScreen();
+			_dialogStack.top()->drawWidgets();
 			break;
 	}
+}
 
-	// Redraw the widgets that are marked as dirty
-	_theme->drawToScreen();
-	_dialogStack.top()->drawWidgets();
+void GuiManager::redrawInternal() {
+	ThemeEngine::ShadingStyle shading;
+
+	shading = (ThemeEngine::ShadingStyle)xmlEval()->getVar("Dialog." + _dialogStack.top()->_name + ".Shading", 0);
+
+	switch (_redrawStatus) {
+		case kRedrawCloseDialog:
+		case kRedrawFull:
+			// Clear everything
+			_theme->clearAll();
+
+			// Draw background and foreground of the whole dialog stack except top one on the backbuffer
+			_theme->drawToBackbuffer();
+			for (DialogStack::size_type i = 0; i < _dialogStack.size() - 1; i++) {
+				_dialogStack[i]->drawDialog(kDrawLayerBackground);
+				_dialogStack[i]->drawDialog(kDrawLayerForeground);
+			}
+
+			// fall through
+
+		case kRedrawOpenDialog:
+		case kRedrawTopDialog:
+			// This case is an optimization to avoid redrawing the whole dialog
+			// stack when opening a new dialog or redrawing the current one.
+
+			_theme->drawToBackbuffer();
+			if (_redrawStatus == kRedrawOpenDialog && _dialogStack.size() > 1) {
+				// When opening a new dialog, merge the foreground of the last top dialog
+				// inside the backbuffer
+				// New top dialog foreground will be drawn on screen
+				Dialog *previousDialog = _dialogStack[_dialogStack.size() - 2];
+				previousDialog->drawDialog(kDrawLayerForeground);
+			}
+
+			// Do not shade when only redrawing the top dialog: shading has already been applied
+			// Do not shade more than once when opening many dialogs on top of each other.
+			// Shading being already applied previously, screen darkens
+			if ((_redrawStatus != kRedrawTopDialog) &&
+				((_redrawStatus != kRedrawOpenDialog) || (_dialogStack.size() <= 2))) {
+				_theme->applyScreenShading(shading);
+			}
+
+			// Finally, draw the top dialog background
+			_dialogStack.top()->drawDialog(kDrawLayerBackground);
+
+			// copy everything to screen and render the top dialog foreground
+			_theme->drawToScreen();
+			_theme->copyBackBufferToScreen();
+
+			_dialogStack.top()->drawDialog(kDrawLayerForeground);
+			break;
+
+		default:
+			// Redraw only the widgets that are marked as dirty on screen
+			_theme->drawToScreen();
+			_dialogStack.top()->drawWidgets();
+			break;
+	}
+}
+
+void GuiManager::redraw() {
+	if (_dialogStack.empty())
+		return;
+
+	// Reset any custom RTL paddings set by stacked dialogs when we go back to the top
+	if (useRTL() && _dialogStack.size() == 1) {
+		setDialogPaddings(0, 0);
+	}
+
+	if (_displayTopDialogOnly) {
+		redrawInternalTopDialogOnly();
+	} else {
+		redrawInternal();
+	}
 
 	_theme->updateScreen();
 	_redrawStatus = kRedrawDisabled;
@@ -507,7 +539,8 @@ void GuiManager::runLoop() {
 		//    then delay showing the tooltip based on the value of kTooltipSameWidgetDelay.
 		uint32 systemMillisNowForTooltipCheck = _system->getMillis(true);
 		if ((_lastTooltipShown.x != _lastMousePosition.x || _lastTooltipShown.y != _lastMousePosition.y)
-		    && _lastMousePosition.time + kTooltipDelay < systemMillisNowForTooltipCheck) {
+		    && _lastMousePosition.time + kTooltipDelay < systemMillisNowForTooltipCheck
+		    && !activeDialog->isDragging()) {
 			Widget *wdg = activeDialog->findWidget(_lastMousePosition.x, _lastMousePosition.y);
 			if (wdg && wdg->hasTooltip() && !(wdg->getFlags() & WIDGET_PRESSED)
 			    && (_lastTooltipShown.wdg != wdg || _lastTooltipShown.time + kTooltipSameWidgetDelay < systemMillisNowForTooltipCheck)) {
@@ -697,9 +730,7 @@ void GuiManager::screenChange() {
 	// We need to redraw immediately. Otherwise
 	// some other event may cause a widget to be
 	// redrawn before redraw() has been called.
-	_redrawStatus = kRedrawFull;
-	redraw();
-	_system->updateScreen();
+	redrawFull();
 
 #ifdef ENABLE_EVENTRECORDER
 	// Resume recording once GUI has redrawn
@@ -776,7 +807,13 @@ void GuiManager::processEvent(const Common::Event &event, Dialog *const activeDi
 }
 
 void GuiManager::scheduleTopDialogRedraw() {
-	_redrawStatus = kRedrawTopDialog;
+	// Open/Close dialog redraws have higher priority, otherwise they may not be processed at all
+	if (_redrawStatus != kRedrawOpenDialog && _redrawStatus != kRedrawCloseDialog)
+		_redrawStatus = kRedrawTopDialog;
+}
+
+void GuiManager::scheduleFullRedraw() {
+	_redrawStatus = kRedrawFull;
 }
 
 void GuiManager::giveFocusToDialog(Dialog *dialog) {

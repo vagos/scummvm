@@ -199,7 +199,7 @@ bool Screen::init() {
 
 			if (_use16ColorMode)
 				_fonts[FID_SJIS_TEXTMODE_FNT] = new SJISFont(_sjisFontShared, _sjisInvisibleColor, true, false, 0);
-			else
+			else if (!(_vm->gameFlags().platform == Common::kPlatformPC98 && _vm->game() != GI_EOB2))
 				_fonts[FID_SJIS_FNT] = new SJISFont(_sjisFontShared, _sjisInvisibleColor, false, _vm->game() != GI_LOL && _vm->game() != GI_EOB2, _vm->game() == GI_LOL ? 1 : 0);
 		}
 	}
@@ -1398,7 +1398,15 @@ bool Screen::loadFont(FontId fontId, const char *filename) {
 				if (_vm->game() == GI_KYRA2) {
 					fn1 = new ChineseOneByteFontHOF(SCREEN_W);
 					fn2 = new ChineseTwoByteFontHOF(SCREEN_W);
-				} else {
+				}
+#ifdef ENABLE_LOL
+				else if (_vm->game() == GI_LOL) {
+					// Same as next one but with different spacing
+					fn1 = new ChineseOneByteFontLoL(SCREEN_W);
+					fn2 = new ChineseTwoByteFontLoL(SCREEN_W);
+				}
+#endif
+				else {
 					fn1 = new ChineseOneByteFontMR(SCREEN_W);
 					fn2 = new ChineseTwoByteFontMR(SCREEN_W);
 				}
@@ -1559,7 +1567,7 @@ void Screen::printText(const char *str, int x, int y, uint8 color1, uint8 color2
 
 uint16 Screen::fetchChar(const char *&s) const {
 	const int fontType = _fonts[_currentFont]->getType();
-	if (fontType == Font::kASCII)
+	if (fontType == Font::kASCII || fontType == Font::kJIS_X0201)
 		return (uint8)*s++;
 
 	uint16 ch = (uint8)*s++;

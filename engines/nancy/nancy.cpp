@@ -36,7 +36,7 @@
 #include "engines/nancy/console.h"
 #include "engines/nancy/util.h"
 
-#include "engines/nancy/action/primaryvideo.h"
+#include "engines/nancy/action/conversation.h"
 
 #include "engines/nancy/state/logo.h"
 #include "engines/nancy/state/scene.h"
@@ -54,12 +54,14 @@ NancyEngine::NancyEngine(OSystem *syst, const NancyGameDescription *gd) :
 		_gameDescription(gd),
 		_system(syst),
 		_datFileMajorVersion(0),
-		_datFileMinorVersion(2) {
+		_datFileMinorVersion(2),
+		_false(gd->gameType <= kGameTypeNancy2 ? 1 : 0),
+		_true(gd->gameType <= kGameTypeNancy2 ? 2 : 1) {
 
 	g_nancy = this;
 
 	_randomSource = new Common::RandomSource("Nancy");
-	_randomSource->setSeed(_randomSource->getSeed());
+	_randomSource->setSeed(Common::RandomSource::generateNewSeed());
 
 	_input = new InputManager();
 	_sound = new SoundManager();
@@ -78,6 +80,7 @@ NancyEngine::NancyEngine(OSystem *syst, const NancyGameDescription *gd) :
 	_hintData = nullptr;
 	_sliderPuzzleData = nullptr;
 	_clockData = nullptr;
+	_specialEffectData = nullptr;
 }
 
 NancyEngine::~NancyEngine() {
@@ -98,21 +101,15 @@ NancyEngine::~NancyEngine() {
 	delete _hintData;
 	delete _sliderPuzzleData;
 	delete _clockData;
+	delete _specialEffectData;
 }
 
 NancyEngine *NancyEngine::create(GameType type, OSystem *syst, const NancyGameDescription *gd) {
-	switch (type) {
-	case kGameTypeVampire:
+	if (type >= kGameTypeVampire && type <= kGameTypeNancy6) {
 		return new NancyEngine(syst, gd);
-	case kGameTypeNancy1:
-		return new NancyEngine(syst, gd);
-	case kGameTypeNancy2:
-		return new NancyEngine(syst, gd);
-	case kGameTypeNancy3:
-		return new NancyEngine(syst, gd);
-	default:
-		error("Unknown GameType");
 	}
+	
+	error("Unknown GameType");
 }
 
 Common::Error NancyEngine::loadGameStream(Common::SeekableReadStream *stream) {
@@ -132,7 +129,9 @@ bool NancyEngine::canLoadGameStateCurrently() {
 
 bool NancyEngine::canSaveGameStateCurrently() {
 	// TODO also disable during secondary movie
-	return State::Scene::hasInstance() && NancySceneState.getActivePrimaryVideo() == nullptr;
+	return State::Scene::hasInstance() &&
+			NancySceneState._state == State::Scene::kRun &&
+			NancySceneState.getActiveConversation() == nullptr;
 }
 
 bool NancyEngine::canSaveAutosaveCurrently() {
@@ -391,6 +390,11 @@ void NancyEngine::bootGameEngine() {
 		_clockData = new CLOK(chunkStream);
 	}
 
+	chunkStream = boot->getChunkStream("SPEC");
+	if (chunkStream) {
+		_specialEffectData = new SPEC(chunkStream);
+	}
+
 	_sound->loadCommonSounds(boot);
 
 	delete boot;
@@ -500,7 +504,7 @@ void NancyEngine::readDatFile() {
 
 	uint16 numGames = datFile->readUint16LE();
 	if (getGameType() > numGames) {
-		warning("Data for game type %d is not in nancy.dat", numGames);
+		warning("Data for game type %d is not in nancy.dat", getGameType());
 		return;
 	}
 

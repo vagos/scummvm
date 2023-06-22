@@ -567,6 +567,12 @@ int ScummEngine::readVar(uint var) {
 				!(_currentRoom == 4 && (vm.slot[_currentScript].number == 2150 || vm.slot[_currentScript].number == 2208 || vm.slot[_currentScript].number == 2210))) {
 				return 263;
 			}
+			// Mod for Backyard Baseball 2001 online competitive play: allow random bounces
+			// Normally they only happen offline; this script checks var399, here we tell this
+			// script that we're not in online play even if we are
+			if (_game.id == GID_BASEBALL2001 && vm.slot[_currentScript].number == 39 && var == 399) {
+				return 0;
+			}
 		}
 #endif
 		assertRange(0, var, _numVariables - 1, "variable (reading)");
@@ -577,6 +583,32 @@ int ScummEngine::readVar(uint var) {
 		if (_game.heversion >= 80) {
 			var &= 0xFFF;
 			assertRange(0, var, _numRoomVariables - 1, "room variable (reading)");
+
+#if defined(USE_ENET) && defined(USE_LIBCURL)
+			if (ConfMan.getBool("enable_competitive_mods")) {
+				// Mod for Backyard Baseball 2001 online competitive play: increase hit quality
+				// for pitches on the inside corners
+				if (_game.id == GID_BASEBALL2001 &&
+					_currentRoom == 4 && vm.slot[_currentScript].number == 2085 &&  // The script that calculates hit quality
+					readVar(399) == 1 &&  // Check that we're playing online
+					var == 2 &&  // Reading room variable 2, which is the zone that the ball is pitched to
+					readVar(447) == 1  // And the batter is in an open stance
+				) {
+					if (_roomVars[0] == 1 && (_roomVars[var] == 9 || _roomVars[var] == 37)) {  // Right-handed batter
+						return _roomVars[var] + 1;
+					} else if (_roomVars[0] == 2 && (_roomVars[var] == 13 || _roomVars[var] == 41)) {  // Left-handed batter
+						return _roomVars[var] - 1;
+					}
+				}
+				// Mod for Backyard Baseball 2001 online competitive play: don't give powerups for double plays
+				// Return true for this variable, which dictates whether powerups are disabled, but only in this script
+				// that detects double plays (among other things)
+				if (_game.id == GID_BASEBALL2001 && _currentRoom == 3 && vm.slot[_currentScript].number == 2099 && var == 32 && readVar(399) == 1) {
+					return 1;
+				}
+			}
+#endif
+
 			return _roomVars[var];
 
 		} else if (_game.version <= 3 && !(_game.id == GID_INDY3 && _game.platform == Common::kPlatformFMTowns) &&

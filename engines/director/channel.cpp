@@ -26,16 +26,20 @@
 #include "director/cast.h"
 #include "director/channel.h"
 #include "director/sprite.h"
-#include "director/castmember.h"
 #include "director/types.h"
 #include "director/window.h"
+#include "director/castmember/castmember.h"
+#include "director/castmember/bitmap.h"
+#include "director/castmember/digitalvideo.h"
+#include "director/castmember/filmloop.h"
 
 #include "graphics/macgui/mactext.h"
 #include "graphics/macgui/macbutton.h"
 
 namespace Director {
 
-Channel::Channel(Sprite *sp, int priority) {
+Channel::Channel(Score *sc, Sprite *sp, int priority) {
+	_score = sc;
 	if (!sp)
 		_sprite = nullptr;
 	else
@@ -43,7 +47,6 @@ Channel::Channel(Sprite *sp, int priority) {
 
 	_widget = nullptr;
 	_currentPoint = _sprite ? _sprite->_startPoint : Common::Point(0, 0);
-	_delta = Common::Point(0, 0);
 	_constraint = 0;
 	_mask = nullptr;
 
@@ -70,11 +73,11 @@ Channel::Channel(const Channel &channel) {
 }
 
 Channel& Channel::operator=(const Channel &channel) {
+	_score = channel._score;
 	_sprite = channel._sprite ? new Sprite(*channel._sprite) : nullptr;
 
 	_widget = nullptr;
 	_currentPoint = channel._currentPoint;
-	_delta = channel._delta;
 	_constraint = channel._constraint;
 	_mask = nullptr;
 
@@ -209,7 +212,6 @@ bool Channel::isDirty(Sprite *nextSprite) {
 		return false;
 
 	bool isDirtyFlag = _dirty ||
-		_delta != Common::Point(0, 0) ||
 		(_sprite->_cast && _sprite->_cast->isModified());
 
 	if (_sprite && !_sprite->_puppet) {
@@ -346,21 +348,10 @@ bool Channel::isVideoDirectToStage() {
 Common::Rect Channel::getBbox(bool unstretched) {
 	Common::Rect result(unstretched ? _sprite->_width : _width,
 						unstretched ? _sprite->_height : _height);
-	result.moveTo(getPosition());
-
-	if (_constraint > 0 && _constraint <= g_director->getCurrentMovie()->getScore()->_channels.size()) {
-		Common::Rect constraintBbox = g_director->getCurrentMovie()->getScore()->_channels[_constraint]->getBbox();
-		if (result.top < constraintBbox.top)
-			_currentPoint.y = constraintBbox.top;
-		if (result.left < constraintBbox.left)
-			_currentPoint.x = constraintBbox.left;
-		if (result.top > constraintBbox.bottom)
-			_currentPoint.y = constraintBbox.bottom;
-		if (result.left > constraintBbox.right)
-			_currentPoint.x = constraintBbox.right;
+	if (_sprite->_cast) {
+		result = _sprite->_cast->getBbox(_width, _height);
 	}
-	result.moveTo(getPosition());
-
+	result.translate(_currentPoint.x, _currentPoint.y);
 	return result;
 }
 
@@ -373,6 +364,11 @@ void Channel::setCast(CastMemberID memberID) {
 	_width = _sprite->_width;
 	_height = _sprite->_height;
 	replaceWidget();
+
+	if (!_sprite->_puppet && g_director->getVersion() >= 600) {
+		// Based on Director in a Nutshell, page 15
+		_sprite->_autoPuppet = true;
+	}
 }
 
 void Channel::setClean(Sprite *nextSprite, int spriteId, bool partial) {
@@ -425,9 +421,6 @@ void Channel::setClean(Sprite *nextSprite, int spriteId, bool partial) {
 			previousCastId = _sprite->_castId;
 			replaceSprite(nextSprite);
 		}
-
-		_currentPoint += _delta;
-		_delta = Common::Point(0, 0);
 	}
 
 	// FIXME: organize the logic here.
@@ -523,8 +516,12 @@ void Channel::replaceSprite(Sprite *nextSprite) {
 
 	int width = _width;
 	int height = _height;
+	bool immediate = _sprite->_immediate;
 
 	*_sprite = *nextSprite;
+
+	// Persist the immediate flag
+	_sprite->_immediate = immediate;
 
 	// TODO: auto expand text size is meaning less for us, not all text
 	// since we are using initialRect for the text cast member now, then the sprite size is meaning less for us.
@@ -546,35 +543,63 @@ void Channel::replaceSprite(Sprite *nextSprite) {
 }
 
 void Channel::setWidth(int w) {
-	if (_sprite->_puppet) {
-		if (!(_sprite->_cast && _sprite->_cast->_type == kCastShape) && !_sprite->_stretch)
-			return;
-		_width = MAX<int>(w, 0);
+	if (!(_sprite->_cast && _sprite->_cast->_type == kCastShape) && !_sprite->_stretch)
+		return;
+	_width = MAX<int>(w, 0);
+
+	if (!_sprite->_puppet && g_director->getVersion() >= 600) {
+		// Based on Director in a Nutshell, page 15
+		_sprite->_autoPuppet = true;
 	}
 }
 
 void Channel::setHeight(int h) {
-	if (_sprite->_puppet) {
-		if (!(_sprite->_cast && _sprite->_cast->_type == kCastShape) && !_sprite->_stretch)
-			return;
-		_height = MAX<int>(h, 0);
+	if (!(_sprite->_cast && _sprite->_cast->_type == kCastShape) && !_sprite->_stretch)
+		return;
+	_height = MAX<int>(h, 0);
+
+	if (!_sprite->_puppet && g_director->getVersion() >= 600) {
+		// Based on Director in a Nutshell, page 15
+		_sprite->_autoPuppet = true;
 	}
 }
 
 void Channel::setBbox(int l, int t, int r, int b) {
-	if (_sprite->_puppet) {
+	if (_sprite->_stretch) {
 		if (!(_sprite->_cast && _sprite->_cast->_type == kCastShape) && !_sprite->_stretch)
 			return;
 		_width = r - l;
 		_height = b - t;
 
-		_currentPoint.x = (int16)((l + r) / 2);
-		_currentPoint.y = (int16)((t + b) / 2);
+		Common::Rect source(_width, _height);
+		if (_sprite->_cast) {
+			source = _sprite->_cast->getBbox(_width, _height);
+		}
+		_currentPoint.x = (int16)(l - source.left);
+		_currentPoint.y = (int16)(t - source.top);
 
-		addRegistrationOffset(_currentPoint, true);
+		if (_width <= 0 || _height <= 0)
+			_width = _height = 0;
+	}
 
-		_currentPoint.x -= (int16)((_sprite->_width) / 2);
-		_currentPoint.y -= (int16)((_sprite->_height) / 2);
+	if (!_sprite->_puppet && g_director->getVersion() >= 600) {
+		// Based on Director in a Nutshell, page 15
+		_sprite->_autoPuppet = true;
+	}
+}
+
+void Channel::setPosition(int x, int y, bool force) {
+	Common::Point newPos(x, y);
+	if (_constraint > 0 && _score && _constraint <= _score->_channels.size()) {
+		Common::Rect constraintBbox = _score->_channels[_constraint]->getBbox();
+		newPos.x = MIN(constraintBbox.right, MAX(constraintBbox.left, newPos.x));
+		newPos.y = MIN(constraintBbox.bottom, MAX(constraintBbox.top, newPos.y));
+	}
+	_currentPoint = newPos;
+
+	if (!_sprite->_puppet && g_director->getVersion() >= 600) {
+		// Based on Director in a Nutshell, page 15
+		_sprite->_autoPuppet = true;
 	}
 }
 
@@ -653,69 +678,6 @@ bool Channel::isTrail() {
 	return _sprite->_trails;
 }
 
-void Channel::addRegistrationOffset(Common::Point &pos, bool subtract) {
-	if (!_sprite->_cast)
-		return;
-
-	switch (_sprite->_cast->_type) {
-	case kCastBitmap:
-		{
-			if (subtract)
-				pos -= _sprite->getRegistrationOffset();
-			else
-				pos += _sprite->getRegistrationOffset();
-		}
-		break;
-	case kCastDigitalVideo:
-	case kCastFilmLoop:
-		pos -= _sprite->getRegistrationOffset();
-	default:
-		break;
-	}
-	return;
-}
-
-void Channel::addDelta(Common::Point pos) {
-	// TODO: Channel should have a pointer to its score
-	if (_sprite->_moveable &&
-			_constraint > 0 &&
-			_constraint < g_director->getCurrentMovie()->getScore()->_channels.size()) {
-		Common::Rect constraintBbox = g_director->getCurrentMovie()->getScore()->_channels[_constraint]->getBbox();
-
-		Common::Rect currentBbox = getBbox();
-		currentBbox.translate(_delta.x + pos.x, _delta.y + pos.y);
-
-		Common::Point regPoint;
-		addRegistrationOffset(regPoint);
-
-		constraintBbox.top += regPoint.y;
-		constraintBbox.bottom -= regPoint.y;
-
-		constraintBbox.left += regPoint.x;
-		constraintBbox.right -= regPoint.x;
-
-		// offset for the boundary
-		constraintBbox.right++;
-		constraintBbox.bottom++;
-
-		if (!constraintBbox.contains(currentBbox)) {
-			if (currentBbox.top < constraintBbox.top) {
-				pos.y += constraintBbox.top - currentBbox.top;
-			} else if (currentBbox.top > constraintBbox.bottom) {
-				pos.y += constraintBbox.bottom;
-			}
-
-			if (currentBbox.left < constraintBbox.left) {
-				pos.x += constraintBbox.left - currentBbox.left;
-			} else if (currentBbox.left > constraintBbox.right) {
-				pos.x += constraintBbox.right;
-			}
-		}
-	}
-
-	_delta += pos;
-}
-
 int Channel::getMouseChar(int x, int y) {
 	if (_sprite->_spriteType != kTextSprite)
 		return -1;
@@ -762,16 +724,6 @@ int Channel::getMouseLine(int x, int y) {
 	}
 
 	return ((Graphics::MacText *)_widget)->getMouseLine(x, y);
-}
-
-Common::Point Channel::getPosition() {
-	Common::Point res = _currentPoint;
-	addRegistrationOffset(res);
-
-	res.x += (_sprite->_width - _width) / 2;
-	res.y += (_sprite->_height - _height) / 2;
-
-	return res;
 }
 
 bool Channel::hasSubChannels() {

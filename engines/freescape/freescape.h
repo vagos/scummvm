@@ -95,6 +95,8 @@ public:
 
 	// Game selection
 	uint32 _variant;
+	Common::Language _language;
+	bool isSpaceStationOblivion() { return _targetName.hasPrefix("spacestationoblivion"); }
 	bool isDriller() { return _targetName.hasPrefix("driller") || _targetName.hasPrefix("spacestationoblivion"); }
 	bool isDark() { return _targetName.hasPrefix("darkside"); }
 	bool isEclipse() { return _targetName.hasPrefix("totaleclipse"); }
@@ -224,6 +226,7 @@ public:
 	virtual void pressedKey(const int keycode);
 	virtual bool onScreenControls(Common::Point mouse);
 	void move(CameraMovement direction, uint8 scale, float deltaTime);
+	void resolveCollisions(Math::Vector3d newPosition);
 	virtual void checkIfStillInArea();
 	void changePlayerHeight(int index);
 	void increaseStepSize();
@@ -240,6 +243,7 @@ public:
 	float _lastFrame;
 
 	// Interaction
+	void activate();
 	void shoot();
 	void traverseEntrance(uint16 entranceID);
 
@@ -273,14 +277,17 @@ public:
 	Common::Array<Common::String> _conditionSources;
 	Common::Array<FCLInstructionVector> _conditions;
 
-	bool checkCollisions(bool executeCode);
+	void runCollisionConditions(Math::Vector3d const lastPosition, Math::Vector3d const newPosition);
 	Math::Vector3d _objExecutingCodeSize;
 	virtual void executeMovementConditions();
-	void executeObjectConditions(GeometricObject *obj, bool shot, bool collided);
+	void executeObjectConditions(GeometricObject *obj, bool shot, bool collided, bool activated);
 	void executeLocalGlobalConditions(bool shot, bool collided, bool timer);
-	void executeCode(FCLInstructionVector &code, bool shot, bool collided, bool timer);
+	void executeCode(FCLInstructionVector &code, bool shot, bool collided, bool timer, bool activated);
 
 	// Instructions
+	bool checkConditional(FCLInstruction &instruction, bool shot, bool collided, bool timer, bool activated);
+	bool checkIfGreaterOrEqual(FCLInstruction &instruction);
+	void executeExecute(FCLInstruction &instruction);
 	void executeIncrementVariable(FCLInstruction &instruction);
 	void executeDecrementVariable(FCLInstruction &instruction);
 	void executeSetVariable(FCLInstruction &instruction);
@@ -355,6 +362,7 @@ public:
 	void loadMessagesVariableSize(Common::SeekableReadStream *file, int offset, int number);
 
 	void loadFonts(Common::SeekableReadStream *file, int offset);
+	void loadFonts(byte *font, int charNumber);
 	Common::StringArray _currentAreaMessages;
 	Common::StringArray _currentEphymeralMessages;
 	Common::BitArray _font;
@@ -420,6 +428,8 @@ enum DrillerReleaseFlags {
 		GF_CPC_RETAIL2 = (1 << 6),
 		GF_CPC_BUDGET = (1 << 7),
 		GF_CPC_VIRTUALWORLDS = (1 << 8),
+		GF_ATARI_RETAIL = (1 << 9),
+		GF_ATARI_BUDGET = (1 << 10),
 };
 
 class DrillerEngine : public FreescapeEngine {
@@ -502,6 +512,8 @@ private:
 
 	uint32 getPixel8bitTitleImage(int index);
 	void renderPixels8bitTitleImage(Graphics::ManagedSurface *surface, int &i, int &j, int pixels);
+
+	Common::SeekableReadStream *decryptFileAtari(const Common::String filename);
 };
 
 class DarkEngine : public FreescapeEngine {
@@ -519,13 +531,21 @@ public:
 	void pressedKey(const int keycode) override;
 	void executePrint(FCLInstruction &instruction) override;
 
+	void initDOS();
+	void initZX();
+
 	void loadAssetsDOSFullGame() override;
 	void loadAssetsDOSDemo() override;
+	void loadAssetsAmigaFullGame() override;
+
+	void loadAssetsZXDemo() override;
 
 	int _lastTenSeconds;
 	void updateTimeVariables() override;
 
 	void drawDOSUI(Graphics::Surface *surface) override;
+	void drawZXUI(Graphics::Surface *surface) override;
+
 	void drawFullscreenMessage(Common::String message);
 	Common::Error saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave = false) override;
 	Common::Error loadGameStreamExtended(Common::SeekableReadStream *stream) override;
@@ -534,6 +554,7 @@ private:
 	void addECDs(Area *area);
 	void addECD(Area *area, const Math::Vector3d position, int index);
 	void addWalls(Area *area);
+	Common::SeekableReadStream *decryptFile(const Common::String filename);
 };
 
 class EclipseEngine : public FreescapeEngine {
@@ -553,11 +574,18 @@ public:
 class CastleEngine : public FreescapeEngine {
 public:
 	CastleEngine(OSystem *syst, const ADGameDescription *gd);
+	~CastleEngine();
 
+	Graphics::ManagedSurface *_option;
+	void initGameState() override;
 	void titleScreen() override;
 	void loadAssetsDOSFullGame() override;
-	void drawUI() override;
+	void loadAssetsDOSDemo() override;
+	void loadAssetsAmigaDemo() override;
 
+	void drawDOSUI(Graphics::Surface *surface) override;
+
+	void executePrint(FCLInstruction &instruction) override;
 	void gotoArea(uint16 areaID, int entranceID) override;
 	Common::Error saveGameStreamExtended(Common::WriteStream *stream, bool isAutosave = false) override;
 	Common::Error loadGameStreamExtended(Common::SeekableReadStream *stream) override;

@@ -29,6 +29,8 @@
 #include "common/hashmap.h"
 #include "common/events.h"
 
+#include "graphics/renderer.h"
+
 #include "engines/grim/textobject.h"
 #include "engines/grim/iris.h"
 #include "engines/grim/detection.h"
@@ -173,6 +175,8 @@ public:
 
 	Commentary *getCommentary() { return _commentary; }
 
+	Graphics::RendererType getRendererType();
+
 	// TODO: Refactor.
 	void setSaveMetaData(const char*, int, const char*);
 
@@ -288,6 +292,8 @@ protected:
 public:
 	int _cursorX = 0;
 	int _cursorY = 0;
+	bool _isUtf8 = false;
+	Font *_overrideFont = nullptr;
 };
 
 extern GrimEngine *g_grim;

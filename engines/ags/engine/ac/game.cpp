@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/config-manager.h"
 #include "common/memstream.h"
 #include "ags/engine/ac/game.h"
 #include "ags/shared/ac/common.h"
@@ -880,7 +881,11 @@ void save_game(int slotn, const char *descript) {
 	VALIDATE_STRING(descript);
 	String nametouse = get_save_game_path(slotn);
 	std::unique_ptr<Bitmap> screenShot;
-	if (_GP(game).options[OPT_SAVESCREENSHOT] != 0)
+
+	// WORKAROUND: AGS originally only creates savegames if the game flags
+	// that it supports it. But we want it all the time for ScummVM GMM,
+	// unless explicitly disabled through gameflag
+	if ((/*_GP(game).options[OPT_SAVESCREENSHOT] != 0*/ true) && _G(saveThumbnail))
 		screenShot.reset(create_savegame_screenshot());
 
 	std::unique_ptr<Stream> out(StartSavegame(nametouse, descript, screenShot.get()));
@@ -1262,7 +1267,7 @@ void replace_tokens(const char *srcmes, char *destm, int maxlen) {
 	while (srcmes[indxsrc] != 0) {
 		srcp = &srcmes[indxsrc];
 		destp = &destm[indxdest];
-		if ((strncmp(srcp, "@IN", 3) == 0) | (strncmp(srcp, "@GI", 3) == 0)) {
+		if ((strncmp(srcp, "@IN", 3) == 0) || (strncmp(srcp, "@GI", 3) == 0)) {
 			int tokentype = 0;
 			if (srcp[1] == 'I') tokentype = 1;
 			else tokentype = 2;
@@ -1378,18 +1383,20 @@ void game_sprite_deleted(int sprnum) {
 	_G(gfxDriver)->ClearSharedDDB(sprnum);
 	// character and object draw caches
 	reset_objcache_for_sprite(sprnum, true);
+
+	// This is ugly, but apparently there are few games that may rely
+	// (either with or without author's intent) on newly created sprite
+	// being assigned same index as a recently deleted one, which results
+	// in new sprite "secretly" taking place of an old one on the GUI, etc.
+	// So for old games we keep only partial reset (full cleanup is 3.5.0+).
+	const bool reset_sprindex_oldstyle =
+		_G(loaded_game_file_version) < kGameVersion_350;
+
 	// room object graphics
 	if (_G(croom) != nullptr) {
 		for (size_t i = 0; i < (size_t)_G(croom)->numobj; ++i) {
 			if (_G(objs)[i].num == sprnum)
 				_G(objs)[i].num = 0;
-		}
-	}
-	// gui backgrounds
-	for (size_t i = 0; i < (size_t)_GP(game).numgui; ++i) {
-		if (_GP(guis)[i].BgImage == sprnum) {
-			_GP(guis)[i].BgImage = 0;
-			_GP(guis)[i].MarkChanged();
 		}
 	}
 	// gui buttons
@@ -1404,6 +1411,17 @@ void game_sprite_deleted(int sprnum) {
 		if (but.CurrentImage == sprnum) {
 			but.CurrentImage = 0;
 			but.MarkChanged();
+		}
+	}
+
+	if (reset_sprindex_oldstyle)
+		return; // stop here for < 3.5.0 games
+
+	// gui backgrounds
+	for (size_t i = 0; i < (size_t)_GP(game).numgui; ++i) {
+		if (_GP(guis)[i].BgImage == sprnum) {
+			_GP(guis)[i].BgImage = 0;
+			_GP(guis)[i].MarkChanged();
 		}
 	}
 	// gui sliders

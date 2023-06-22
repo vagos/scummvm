@@ -234,15 +234,22 @@ public:
 	volatile int _mouse_z = 0;  // Mouse wheel vertical
 	volatile int _mouse_b = 0;  // Mouse buttons bitflags
 	volatile int _mouse_pos = 0;    // X position in upper 16 bits, Y in lower 16
+
+	// Accumulated absolute and relative mouse device motion.
+	// May be retrieved by calling *acquire_absxy and *acquire_relxy functions,
+	// after which these are reset, until next motion event is received.
 	volatile int _sys_mouse_x = 0; // mouse x position
 	volatile int _sys_mouse_y = 0; // mouse y position
 	volatile int _sys_mouse_z = 0; // mouse wheel position
+
 	volatile int _freeze_mouse_flag = 0;
+
+	// Relative x and y deltas
+	int _mouse_accum_relx = 0, _mouse_accum_rely = 0;
 
 	int _mouse_button_state = 0;
 	int _mouse_accum_button_state = 0;
 	uint32 _mouse_clear_at_time = 0;
-	int _mouse_accum_relx = 0, _mouse_accum_rely = 0;
 	eAGSMouseButton _wasbutdown = kMouseNone;
 	int _wasongui = 0;
 
@@ -576,7 +583,7 @@ public:
 
 	// actsps is used for temporary storage of the bitamp and texture
 	// of the latest version of the sprite (room objects and characters);
-	// objects sprites begin with index 0, characters are after MAX_ROOM_OBJECTS
+	// objects sprites begin with index 0, characters are after ACTSP_OBJSOFF
 	std::vector<ObjTexture> *_actsps;
 	// Walk-behind textures (3D renderers only)
 	std::vector<ObjTexture> *_walkbehindobj;
@@ -1085,6 +1092,9 @@ public:
 	std::set<String> _tellInfoKeys;
 	int _loadSaveGameOnStartup = -1;
 
+	// ScummVM GUIO-controlled flag to save a screenshot
+	// when saving (used for saves thumbnails)
+	bool _saveThumbnail = true;
 #if 0
 	//! AGS_PLATFORM_DEFINES_PSP_VARS
 	int _psp_rotation = 0;
@@ -1123,10 +1133,9 @@ public:
 	int8 _currentcursor = 0;
 	// virtual mouse cursor coordinates
 	int _mousex = 0, _mousey = 0, _numcurso = -1, _hotx = 0, _hoty = 0;
-	// real mouse coordinates and bounds
+	// real mouse coordinates and bounds (in window coords)
 	int _real_mouse_x = 0, _real_mouse_y = 0;
 	int _boundx1 = 0, _boundx2 = 99999, _boundy1 = 0, _boundy2 = 99999;
-	int _disable_mgetgraphpos = 0;
 	int8 _ignore_bounds = 0;
 	AGS::Shared::Bitmap *_mousecurs[MAXCURSORS];
 

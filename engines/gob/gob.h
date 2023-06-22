@@ -169,6 +169,7 @@ public:
 
 	bool _resourceSizeWorkaround;
 	bool _enableAdibou2FreeBananasWorkaround;
+	bool _enableAdibou2FlowersInfiniteLoopWorkaround;
 
 	Global *_global;
 	Util *_util;
@@ -205,6 +206,7 @@ public:
 	bool isBATDemo() const;
 	bool is640x480() const;
 	bool is800x600() const;
+	bool is16Colors() const;
 	bool isTrueColor() const;
 	bool isDemo() const;
 

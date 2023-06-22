@@ -222,13 +222,24 @@ void Area::resetArea() {
 }
 
 
-void Area::draw(Freescape::Renderer *gfx) {
-	gfx->clear(_skyColor);
+void Area::draw(Freescape::Renderer *gfx, uint32 ticks) {
 	assert(_drawableObjects.size() > 0);
 	for (auto &obj : _drawableObjects) {
 		if (!obj->isDestroyed() && !obj->isInvisible()) {
-			obj->draw(gfx);
+			if (obj->getType() != ObjectType::kGroupType)
+				obj->draw(gfx);
+			else
+				drawGroup(gfx, (Group *)obj, ticks);
 		}
+	}
+}
+
+void Area::drawGroup(Freescape::Renderer *gfx, Group* group, uint32 ticks) {
+	uint32 groupSize = group->_objects.size();
+	uint32 frameSize = group->_objectPositions.size();
+	for (uint32 i = 0; i < groupSize ; i++) {
+		group->assemble((ticks / 10) % frameSize, i);
+		group->_objects[i]->draw(gfx);
 	}
 }
 
@@ -257,6 +268,112 @@ ObjectArray Area::checkCollisions(const Math::AABB &boundingBox) {
 		}
 	}
 	return collided;
+}
+
+float lineToPlane(Math::Vector3d const &p, Math::Vector3d const &u,  Math::Vector3d const &v, Math::Vector3d const &n) {
+	float NdotU = n.dotProduct(u);
+	if (NdotU == 0)
+		return INFINITY;
+
+	return n.dotProduct(v - p) / NdotU;
+}
+
+bool between(float x, float a, float b) {
+	return x >= a && x <= b;
+}
+
+float sweepAABB(Math::AABB const &a, Math::AABB const &b, Math::Vector3d const &direction, Math::Vector3d &normal) {
+	Math::Vector3d m = b.getMin() - a.getMax();
+	Math::Vector3d mh = a.getSize() + b.getSize();
+
+	float h = 1.0;
+	float s = 0.0;
+	Math::Vector3d zero;
+
+	// X min
+	s = lineToPlane(zero, direction, m, Math::Vector3d(-1, 0, 0));
+	if (s >= 0 && direction.x() > 0 && s < h && between(s * direction.y(), m.y(), m.y()+mh.y()) && between(s * direction.z(), m.z(), m.z() + mh.z())) {
+		h = s;
+		normal = Math::Vector3d(-1, 0, 0);
+	}
+
+	// X max
+	m.x() = m.x() + mh.x();
+	s = lineToPlane(zero, direction, m, Math::Vector3d(1, 0, 0));
+	if (s >= 0 && direction.x() < 0 && s < h && between(s * direction.y(), m.y(), m.y() + mh.y()) && between(s * direction.z(), m.z(), m.z() + mh.z())) {
+		h = s;
+		normal = Math::Vector3d(1, 0, 0);
+	}
+
+	m.x() = m.x() - mh.x();
+	// Y min
+	s = lineToPlane(zero, direction, m, Math::Vector3d(0, -1, 0));
+	if (s >= 0 && direction.y() > 0 && s < h && between(s * direction.x(), m.x(), m.x() + mh.x()) && between(s * direction.z(), m.z(), m.z() + mh.z())) {
+		h = s;
+		normal = Math::Vector3d(0, -1, 0);
+	}
+
+	// Y max
+	m.y() = m.y() + mh.y();
+	s = lineToPlane(zero, direction, m, Math::Vector3d(0, 1, 0));
+	if (s >= 0 && direction.y() < 0 && s < h && between(s * direction.x(), m.x(), m.x() + mh.x()) && between(s * direction.z(), m.z(), m.z() + mh.z())) {
+		h = s;
+		normal = Math::Vector3d(0, 1, 0);
+	}
+
+	m.y() = m.y() - mh.y();
+
+	// Z min
+	s = lineToPlane(zero, direction, m, Math::Vector3d(0, 0, -1));
+	if (s >= 0 && direction.z() > 0 && s < h && between(s * direction.x(), m.x() , m.x() + mh.x()) && between(s * direction.y(), m.y(), m.y() + mh.y())) {
+		h = s;
+		normal = Math::Vector3d(0, 0, -1);
+	}
+
+	// Z max
+	m.z() = m.z() + mh.z();
+	s = lineToPlane(zero, direction, m, Math::Vector3d(0, 0, 1));
+	if (s >= 0 && direction.z() < 0 && s < h && between(s * direction.x(), m.x(), m.x() + mh.x()) && between(s * direction.y(), m.y(), m.y() + mh.y())) {
+		h = s;
+		normal = Math::Vector3d(0, 0, 1);
+	}
+
+	//debug("%f", h);
+	return h;
+}
+
+extern Math::AABB createPlayerAABB(Math::Vector3d const position, int playerHeight);
+
+Math::Vector3d Area::resolveCollisions(const Math::Vector3d &lastPosition_, const Math::Vector3d &newPosition_, int playerHeight) {
+	Math::Vector3d position = newPosition_;
+	Math::Vector3d lastPosition = lastPosition_;
+	Math::AABB boundingBox = createPlayerAABB(lastPosition, playerHeight);
+
+	float epsilon = 1.5;
+	int i = 0;
+	while (true) {
+		float distance = 1.0;
+		Math::Vector3d normal;
+		Math::Vector3d direction = position - lastPosition;
+
+		for (auto &obj : _drawableObjects) {
+			if (!obj->isDestroyed() && !obj->isInvisible()) {
+				GeometricObject *gobj = (GeometricObject *)obj;
+				Math::Vector3d collidedNormal;
+				float collidedDistance = sweepAABB(boundingBox, gobj->_boundingBox, direction, collidedNormal);
+				if (collidedDistance < distance) {
+					distance = collidedDistance;
+					normal = collidedNormal;
+				}
+			}
+		}
+		position = lastPosition + distance * direction + epsilon * normal;
+		if (distance >= 1.0)
+			break;
+		i++;
+		assert(i <= 5);
+	}
+	return position;
 }
 
 bool Area::checkInSight(const Math::Ray &ray, float maxDistance) {
@@ -331,25 +448,29 @@ void Area::addObjectFromArea(int16 id, Area *global) {
 	}
 }
 
-void Area::addStructure(Area *global) {
-	Object *obj = nullptr;
-	if (!global || !_entrancesByID->contains(255)) {
-		int id = 254;
-		Common::Array<uint8> *gColors = new Common::Array<uint8>;
-		for (int i = 0; i < 6; i++)
-			gColors->push_back(_groundColor);
+void Area::addFloor() {
+	int id = 0;
+	assert(!_objectsByID->contains(id));
+	Common::Array<uint8> *gColors = new Common::Array<uint8>;
+	for (int i = 0; i < 6; i++)
+		gColors->push_back(_groundColor);
 
-		obj = (Object *)new GeometricObject(
-			ObjectType::kCubeType,
-			id,
-			0,                             // flags
-			Math::Vector3d(0, -1, 0),      // Position
-			Math::Vector3d(4128, 1, 4128), // size
-			gColors,
-			nullptr,
-			FCLInstructionVector());
-		(*_objectsByID)[id] = obj;
-		_drawableObjects.insert_at(0, obj);
+	Object *obj = (Object *)new GeometricObject(
+		ObjectType::kCubeType,
+		id,
+		0,                             // flags
+		Math::Vector3d(-4128, -1, -4128),      // Position
+		Math::Vector3d(4128 * 4, 1, 4128 * 4), // size
+		gColors,
+		nullptr,
+		FCLInstructionVector());
+	(*_objectsByID)[id] = obj;
+	_drawableObjects.insert_at(0, obj);
+}
+
+void Area::addStructure(Area *global) {
+	if (!global || !_entrancesByID->contains(255)) {
+		addFloor();
 		return;
 	}
 	GlobalStructure *rs = (GlobalStructure *)(*_entrancesByID)[255];

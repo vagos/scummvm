@@ -52,8 +52,8 @@ enum GameType {
 	kGameTypeBabaYaga,
 	kGameTypeLittleRed,
 	kGameTypeOnceUponATime, // Need more inspection to see if Baba Yaga or Abracadabra
-	kGameTypeAJWorld,
-	kGameTypeCrousti,
+	//kGameTypeAJWorld -> Deprecated, duplicated with kGameTypeAdibou1
+	kGameTypeCrousti = 24, // Explicit value needed to not invalidate save games after removing kGameTypeAJWorld
 	kGameTypeDynastyWood
 };
 
@@ -66,11 +66,13 @@ enum Features {
 	kFeaturesBATDemo   = 1 << 4,
 	kFeatures640x480   = 1 << 5,
 	kFeatures800x600   = 1 << 6,
-	kFeaturesTrueColor = 1 << 7
+	kFeaturesTrueColor = 1 << 7,
+	kFeatures16Colors  = 1 << 8
 };
 
 enum AdditionalGameFlags {
-	GF_ENABLE_ADIBOU2_FREE_BANANAS_WORKAROUND = 1 << 0
+	GF_ENABLE_ADIBOU2_FREE_BANANAS_WORKAROUND = 1 << 0,
+	GF_ENABLE_ADIBOU2_FLOWERS_INFINITE_LOOP_WORKAROUND = 1 << 1,
 };
 
 struct GOBGameDescription {

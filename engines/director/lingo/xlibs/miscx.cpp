@@ -24,6 +24,7 @@
  * USED IN:
  * Pippi
  * AMBER: Journeys Beyond
+ * Total Distortion
  *
  *************************************/
 
@@ -71,6 +72,7 @@ namespace Director {
 const char *MiscX::xlibName = "Misc_X";
 const char *MiscX::fileNames[] = {
 	"MISC_X",
+	"sharCOPY", // TD loads this up using openXLib("@:sharCOPY.DLL")
 	0
 };
 

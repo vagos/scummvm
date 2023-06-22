@@ -114,7 +114,13 @@ void Viewport::handleInput(NancyInput &input) {
 	}
 
 	if (direction) {
-		g_nancy->_cursorManager->setCursorType(CursorManager::kMove);
+		if (direction & kLeft) {
+			g_nancy->_cursorManager->setCursorType(CursorManager::kTurnLeft);
+		} else if (direction & kRight) {
+			g_nancy->_cursorManager->setCursorType(CursorManager::kTurnRight);
+		} else {
+			g_nancy->_cursorManager->setCursorType(CursorManager::kMove);
+		}
 
 		if (input.input & NancyInput::kRightMouseButton) {
 			direction |= kMoveFast;
@@ -186,6 +192,8 @@ void Viewport::loadVideo(const Common::String &filename, uint frameNr, uint vert
 	_videoFormat = format;
 
 	enableEdges(kUp | kDown | kLeft | kRight);
+	
+	_panningType = panningType;
 
 	setFrame(frameNr);
 	setVerticalScroll(verticalScroll);
@@ -197,7 +205,6 @@ void Viewport::loadVideo(const Common::String &filename, uint frameNr, uint vert
 
 	_movementLastFrame = 0;
 	_nextMovementTime = 0;
-	_panningType = panningType;
 }
 
 void Viewport::setFrame(uint frameNr) {

@@ -614,6 +614,8 @@ protected:
 
 	virtual void runBootscript();
 
+	virtual void terminateSaveMenuScript() {};
+
 	// Event handling
 public:
 	void parseEvents();	// Used by IMuseDigital::startSound
@@ -1441,7 +1443,15 @@ protected:
 	void upgradeGfxUsageBits();
 	void setGfxUsageBit(int strip, int bit);
 	void clearGfxUsageBit(int strip, int bit);
-	bool testGfxUsageBit(int strip, int bit);
+
+	// speed optimization: inline due to frequent calling
+	bool testGfxUsageBit(int strip, int bit) {
+		assert(strip >= 0 && strip < ARRAYSIZE(gfxUsageBits) / 3);
+		assert(1 <= bit && bit <= 96);
+		bit--;
+		return (gfxUsageBits[3 * strip + bit / 32] & (1 << (bit % 32))) != 0;
+	}
+
 	bool testGfxAnyUsageBits(int strip);
 	bool testGfxOtherUsageBits(int strip, int bit);
 
@@ -1758,8 +1768,8 @@ public:
 	byte VAR_RIGHTBTN_DOWN = 0xFF;	// V7/V8
 	byte VAR_LEFTBTN_HOLD = 0xFF;	// V6/V72HE/V7/V8
 	byte VAR_RIGHTBTN_HOLD = 0xFF;	// V6/V72HE/V7/V8
-	byte VAR_SAVELOAD_SCRIPT = 0xFF;	// V6/V7 (not HE)
-	byte VAR_SAVELOAD_SCRIPT2 = 0xFF;	// V6/V7 (not HE)
+	byte VAR_PRE_SAVELOAD_SCRIPT = 0xFF;	// V6/V7 (not HE)
+	byte VAR_POST_SAVELOAD_SCRIPT = 0xFF;	// V6/V7 (not HE)
 	byte VAR_SAVELOAD_PAGE = 0xFF;		// V8
 	byte VAR_OBJECT_LABEL_FLAG = 0xFF;	// V8
 

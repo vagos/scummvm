@@ -280,6 +280,7 @@ add_feature highres "high resolution" "_highres"
 add_feature mad "MAD" "_mad"
 add_feature jpeg "JPEG" "_jpeg"
 add_feature mpeg2 "mpeg2" "_mpeg2"
+add_feature opengl_game_classic "OpenGL (classic)" "_opengl_game_classic"
 add_feature opengl_game_shaders "OpenGL with shaders" "_opengl_game_shaders"
 add_feature png "PNG" "_png"
 add_feature gif "GIF" "_gif"
@@ -843,8 +844,8 @@ Usage: $0 [OPTIONS]...
 Configuration:
   -h, --help              display this help and exit
   --backend=BACKEND       backend to build (3ds, atari, android, dc, dingux, ds, gcw0,
-                          gph, iphone, ios7, ios7-arm64, maemo, n64, null, opendingux,
-                          openpandora, psp, psp2, samsungtv, sdl, switch, wii) [sdl]
+                          gph, ios7, maemo, n64, null, opendingux, openpandora,
+                          psp, psp2, samsungtv, sdl, switch, wii) [sdl]
 
 Installation directories:
   --prefix=PREFIX         install architecture-independent files in PREFIX
@@ -884,7 +885,6 @@ Special configuration feature:
                                            gcw0 for GCW Zero
                                            gp2x for GP2X
                                            gp2xwiz for GP2X Wiz
-                                           iphone for Apple iPhone (iOS <= 6)
                                            ios7 for Apple iPhone / iPad (iOS >= 7)
                                            ios7-arm64 for Apple iPhone / iPad (iOS >= 7, 64-bit)
                                            kos32 for Kolibri OS
@@ -1689,18 +1689,13 @@ i586-mingw32msvc)
 	_host_os=mingw32msvc
 	_host_cpu=i586
 	;;
-iphone)
-	_host_os=iphone
-	_host_cpu=arm
-	_host_alias=arm-apple-darwin9
-	;;
 ios7)
-	_host_os=iphone
+	_host_os=iphoneos
 	_host_cpu=arm
 	_host_alias=arm-apple-darwin11
 	;;
 ios7-arm64)
-	_host_os=iphone
+	_host_os=iphoneos
 	# Remains of configure not knowing about arm64
 	_host_cpu=aarch64
 	_host_alias=arm64-apple-darwin11
@@ -1817,7 +1812,7 @@ switch)
 	docdir='${prefix}/doc'
 	;;
 tvos)
-	_host_os=iphone
+	_host_os=iphoneos
 	# Remains of configure not knowing about arm64
 	_host_cpu=aarch64
 	_host_alias=arm64-apple-darwin11
@@ -3562,6 +3557,7 @@ if test -n "$_host"; then
 			add_line_to_config_h "/* #define DEBUG_WII_USBGECKO */"
 			add_line_to_config_h "/* #define DEBUG_WII_MEMSTATS */"
 			add_line_to_config_h "/* #define DEBUG_WII_GDB */"
+			add_line_to_config_h "/* #define DEBUG_WII_GDB_NETWORK */"
 			add_line_to_config_h "#define USE_WII_DI"
 			;;
 		gcw0)
@@ -3609,20 +3605,9 @@ if test -n "$_host"; then
 			_timidity=no
 			_port_mk="backends/platform/gph/gp2xwiz-bundle.mk"
 			;;
-		iphone)
-			add_line_to_config_mk 'IPHONE = 1'
-			append_var DEFINES "-DIPHONE"
-			append_var ASFLAGS "-arch armv6"
-			_backend="iphone"
-			_build_scalers=no
-			_build_aspect=no
-			_mt32emu=no
-			_seq_midi=no
-			_timidity=no
-			;;
 		ios7*)
 			add_line_to_config_mk 'IPHONE = 1'
-			append_var DEFINES "-DIPHONE -DIPHONE_IOS7 -DIPHONE_SANDBOXED"
+			append_var DEFINES "-DIPHONE -DIPHONE_IOS7"
 			_backend="ios7"
 			_seq_midi=no
 			_timidity=no
@@ -3667,13 +3652,15 @@ if test -n "$_host"; then
 			if test "$_optimizations" = "yes"; then
 				# --enable-release, --enable-optimizations
 				append_var CXXFLAGS "-fomit-frame-pointer"
+				append_var CXXFLAGS "-fno-exceptions"
+				append_var CXXFLAGS "-ffast-math"
 			fi
 
 			# auto -> no
 			if test "$_release_build" = "yes"; then
 				# --enable-release
 				append_var DEFINES  "-DNDEBUG"
-				append_var DEFINES  "-DDISABLE_TEXT_CONSOLE"
+				#append_var DEFINES  "-DDISABLE_TEXT_CONSOLE"
 				append_var CXXFLAGS "-I$HOME/gnu-tools/m68000/m68k-atari-mint/sys-root/opt/mintlib-dlmalloc/include"
 				append_var LDFLAGS  "-L$HOME/gnu-tools/m68000/m68k-atari-mint/sys-root/opt/mintlib-dlmalloc/lib/m68020-60"
 			fi
@@ -3904,7 +3891,7 @@ if test -n "$_host"; then
 			;;
 		tvos)
 			add_line_to_config_mk 'IPHONE = 1'
-			append_var DEFINES "-DIPHONE -DIPHONE_IOS7 -DIPHONE_SANDBOXED"
+			append_var DEFINES "-DIPHONE -DIPHONE_IOS7"
 			_backend="ios7"
 			_seq_midi=no
 			_timidity=no
@@ -3938,6 +3925,7 @@ if test -n "$_host"; then
 			add_line_to_config_h "#define DEBUG_WII_USBGECKO"
 			add_line_to_config_h "/* #define DEBUG_WII_MEMSTATS */"
 			add_line_to_config_h "/* #define DEBUG_WII_GDB */"
+			add_line_to_config_h "/* #define DEBUG_WII_GDB_NETWORK */"
 			add_line_to_config_h "#define USE_WII_DI"
 			add_line_to_config_h "#define USE_WII_SMB"
 			add_line_to_config_h "#define USE_WII_KBD"
@@ -3969,15 +3957,11 @@ case $_backend in
 		;;
 	atari)
 		define_in_config_if_yes yes "ATARI"
-		define_in_config_if_yes yes "USE_SV_BLITTER"
 		append_var DEFINES "-DDISABLE_LAUNCHERDISPLAY_GRID"
-		#append_var DEFINES "-DDISABLE_FANCY_THEMES"
 		append_var DEFINES "-DDISABLE_SID"
 		append_var DEFINES "-DDISABLE_NES_APU"
 		#append_var DEFINES "-DDISABLE_DOSBOX_OPL"
-		append_var ASFLAGS "-m68030"
-		append_var CXXFLAGS "-m68020-60"
-		append_var LDFLAGS "-m68020-60"
+		append_var LIBS "-lgem"
 		;;
 	dc)
 		append_var INCLUDES '-I$(srcdir)/backends/platform/dc'
@@ -4013,11 +3997,6 @@ case $_backend in
 		fi
 		_sdlconfig=sdl-config
 		_sdl=auto
-		;;
-	iphone)
-		append_var LIBS "-lobjc -framework UIKit -framework CoreGraphics -framework OpenGLES"
-		append_var LIBS "-framework QuartzCore -framework CoreFoundation -framework Foundation"
-		append_var LIBS "-framework AudioToolbox -framework CoreAudio"
 		;;
 	ios7)
 		append_var LIBS "-lobjc -framework UIKit -framework CoreGraphics -framework OpenGLES"
@@ -4476,7 +4455,7 @@ fi
 # Enable 16bit support only for backends which support it
 #
 case $_backend in
-	3ds | android | dingux | dc | ds | gph | iphone | ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | samsungtv | sdl | switch | wii)
+	3ds | android | dingux | dc | ds | gph | ios7 | kolibrios | maemo | null | opendingux | miyoomini | miyoo | openpandora | psp | psp2 | samsungtv | sdl | switch | wii)
 		if test "$_16bit" = auto ; then
 			_16bit=yes
 		else
@@ -4552,7 +4531,7 @@ case $_host_os in
 	amigaos* | dreamcast | ds | gamecube | kolibrios | mingw* | morphos | n64 | ps3 | psp2 | psp | riscos | wii)
 		_posix=no
 		;;
-	3ds | android | beos* | bsd* | cygwin* | darwin* | dragonfly* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | serenity* | solaris* | sunos* | switch | uclinux*)
+	3ds | android | beos* | bsd* | cygwin* | darwin* | dragonfly* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphoneos | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | serenity* | solaris* | sunos* | switch | uclinux*)
 		_posix=yes
 		;;
 	os2-emx*)
@@ -5838,7 +5817,7 @@ case $_host_os in
 		FLUIDSYNTH_STATIC_LIBS="$FLUIDSYNTH_LIBS -framework Foundation -framework CoreServices -framework CoreMIDI -framework CoreAudio -framework AudioToolbox -lglib-2.0 -lintl -liconv -lreadline"
 	;;
 
-	iphone)
+	iphoneos)
 		FLUIDSYNTH_STATIC_LIBS="$FLUIDSYNTH_LIBS -framework Foundation -framework CoreMIDI -lglib-2.0 -lintl -liconv"
 	;;
 

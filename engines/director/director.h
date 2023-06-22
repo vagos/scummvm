@@ -112,12 +112,12 @@ struct StartOptions {
 };
 
 struct PaletteV4 {
-	int id;
+	CastMemberID id;
 	byte *palette;
 	int length;
 
-	PaletteV4(int i, byte *p, int l) : id(i), palette(p), length(l) {}
-	PaletteV4() : id(0), palette(nullptr), length(0) {}
+	PaletteV4(CastMemberID i, byte *p, int l) : id(i), palette(p), length(l) {}
+	PaletteV4() : id(), palette(nullptr), length(0) {}
 };
 
 struct MacShape {
@@ -159,6 +159,7 @@ public:
 	Common::Language getLanguage() const;
 	Common::String getTargetName() { return _targetName; }
 	const char *getExtra();
+	Common::String getRawEXEName() const;
 	Common::String getEXEName() const;
 	StartMovie getStartMovie() const;
 	void parseOptions();
@@ -179,16 +180,16 @@ public:
 	// graphics.cpp
 	bool hasFeature(EngineFeature f) const override;
 
-	void addPalette(int id, byte *palette, int length);
-	bool setPalette(int id);
+	void addPalette(CastMemberID &id, byte *palette, int length);
+	bool setPalette(const CastMemberID &id);
 	void setPalette(byte *palette, uint16 count);
 	void shiftPalette(int startIndex, int endIndex, bool reverse);
 	void clearPalettes();
-	PaletteV4 *getPalette(int id);
+	PaletteV4 *getPalette(const CastMemberID &id);
 	void loadDefaultPalettes();
 
-	const Common::HashMap<int, PaletteV4> &getLoadedPalettes() { return _loadedPalettes; }
-	const Common::HashMap<int, PaletteV4> &getLoaded16Palettes() { return _loaded16Palettes; }
+	const Common::HashMap<CastMemberID, PaletteV4> &getLoadedPalettes() { return _loadedPalettes; }
+	const Common::HashMap<CastMemberID, PaletteV4> &getLoaded16Palettes() { return _loaded16Palettes; }
 	const PaletteV4 &getLoaded4Palette() { return _loaded4Palette; }
 
 	const Common::FSNode *getGameDataDir() const { return &_gameDataDir; }
@@ -210,6 +211,14 @@ public:
 	Common::CodePage getPlatformEncoding();
 
 	Archive *createArchive();
+	Archive *openArchive(const Common::String movie);
+	Archive *loadEXE(const Common::String movie);
+	Archive *loadEXEv3(Common::SeekableReadStream *stream);
+	Archive *loadEXEv4(Common::SeekableReadStream *stream);
+	Archive *loadEXEv5(Common::SeekableReadStream *stream);
+	Archive *loadEXEv7(Common::SeekableReadStream *stream);
+	Archive *loadEXERIFX(Common::SeekableReadStream *stream, uint32 offset);
+	Archive *loadMac(const Common::String movie);
 
 	bool desktopEnabled();
 
@@ -229,6 +238,7 @@ public:
 	Graphics::PixelFormat _pixelformat;
 
 	uint32 _debugDraw = 0;
+	int _defaultVolume = 255;
 
 public:
 	int _colorDepth;
@@ -242,9 +252,10 @@ public:
 	Common::Rect _fixStageRect;
 	Common::List<Common::String> _extraSearchPath;
 
+	// Owner of all Archive objects.
 	Common::HashMap<Common::String, Archive *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _allOpenResFiles;
-	// Opened Resource Files that were opened by OpenResFile
-	Common::HashMap<Common::String, MacArchive *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _openResFiles;
+	// Handles to resource files that were opened by OpenResFile.
+	Common::HashMap<Common::String, Archive *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _openResFiles;
 
 	Common::Array<Graphics::WinCursorGroup *> _winCursor;
 
@@ -260,6 +271,7 @@ public:
 	uint16 _wmWidth;
 	uint16 _wmHeight;
 	byte _fpsLimit;
+	CastMemberID _lastPalette;
 
 private:
 	byte _currentPalette[768];
@@ -276,8 +288,8 @@ private:
 	Graphics::MacPatterns _director3QuickDrawPatterns;
 	PatternTile _builtinTiles[kNumBuiltinTiles];
 
-	Common::HashMap<int, PaletteV4> _loadedPalettes;
-	Common::HashMap<int, PaletteV4> _loaded16Palettes;
+	Common::HashMap<CastMemberID, PaletteV4> _loadedPalettes;
+	Common::HashMap<CastMemberID, PaletteV4> _loaded16Palettes;
 	PaletteV4 _loaded4Palette;
 
 	Graphics::ManagedSurface *_surface;
@@ -319,7 +331,6 @@ struct DirectorPlotData {
 	uint32 preprocessColor(uint32 src);
 	void inkBlitShape(Common::Rect &srcRect);
 	void inkBlitSurface(Common::Rect &srcRect, const Graphics::Surface *mask);
-	void inkBlitStretchSurface(Common::Rect &srcRect, const Graphics::Surface *mask);
 
 	DirectorPlotData(DirectorEngine *d_, SpriteType s, InkType i, int a, uint32 b, uint32 f) : d(d_), sprite(s), ink(i), alpha(a), backColor(b), foreColor(f) {
 		colorWhite = d->_wm->_colorWhite;

@@ -59,6 +59,7 @@ public:
 #ifdef MTROPOLIS_DEBUG_ENABLE
 	const char *debugGetTypeName() const override { return "Behavior Modifier"; }
 	SupportStatus debugGetSupportStatus() const override { return kSupportStatusDone; }
+	void debugInspect(IDebugInspectionReport *report) const override;
 #endif
 
 private:
@@ -475,6 +476,7 @@ private:
 class SimpleMotionModifier : public Modifier {
 public:
 	SimpleMotionModifier();
+	~SimpleMotionModifier();
 
 	bool load(ModifierLoaderContext &context, const Data::SimpleMotionModifier &data);
 
@@ -501,6 +503,9 @@ private:
 		kDirectionFlagLeft = 8,
 	};
 
+	void startRandomBounce(Runtime *runtime);
+	void runRandomBounce(Runtime *runtime);
+
 	Common::SharedPtr<Modifier> shallowClone() const override;
 	const char *getDefaultName() const override;
 
@@ -510,7 +515,13 @@ private:
 	MotionType _motionType;
 	uint16 _directionFlags;
 	uint16 _steps;
-	//uint32 _delayMSecTimes4800;
+	uint32 _delayMSecTimes4800;
+
+	uint64 _lastTickTime;
+
+	Common::Point _velocity;
+
+	Common::SharedPtr<ScheduledEvent> _scheduledEvent;
 };
 
 class DragMotionModifier : public Modifier {
@@ -998,8 +1009,23 @@ private:
 		kTypeToneUp,
 	};
 
+	struct ApplyTaskData {
+		ApplyTaskData() : runtime(nullptr) {}
+
+		Runtime *runtime;
+	};
+
+	struct RemoveTaskData {
+		RemoveTaskData() : runtime(nullptr) {}
+
+		Runtime *runtime;
+	};
+
 	Common::SharedPtr<Modifier> shallowClone() const override;
 	const char *getDefaultName() const override;
+
+	VThreadState applyTask(const ApplyTaskData &taskData);
+	VThreadState removeTask(const RemoveTaskData &taskData);
 
 	Event _applyWhen;
 	Event _removeWhen;
@@ -1482,6 +1508,7 @@ public:
 	bool respondsToEvent(const Event &evt) const override;
 	VThreadState consumeMessage(Runtime *runtime, const Common::SharedPtr<MessageProperties> &msg) override;
 
+	bool readAttribute(MiniscriptThread *thread, DynamicValue &result, const Common::String &attrib) override;
 
 #ifdef MTROPOLIS_DEBUG_ENABLE
 	const char *debugGetTypeName() const override { return "Object Reference Variable Modifier V1"; }

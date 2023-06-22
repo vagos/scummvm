@@ -117,7 +117,7 @@ uint getSizeNextPOT(uint size);
 - (void)updateMouseCursor;
 
 #if TARGET_OS_IOS
-- (void)deviceOrientationChanged:(UIDeviceOrientation)orientation;
+- (void)interfaceOrientationChanged:(UIInterfaceOrientation)orientation;
 #endif
 
 - (void)showKeyboard;
@@ -139,10 +139,12 @@ uint getSizeNextPOT(uint size);
 - (void)addEvent:(InternalEvent)event;
 - (bool)fetchEvent:(InternalEvent *)event;
 
+- (void)getMouseScaleFactorX:(CGFloat *)x andY:(CGFloat *)y;
 - (bool)getMouseCoords:(CGPoint)point eventX:(int *)x eventY:(int *)y;
 - (BOOL)isTouchControllerConnected;
 - (BOOL)isMouseControllerConnected;
 - (BOOL)isGamepadControllerConnected;
+- (void)virtualController:(bool)connect;
 @end
 
 #endif

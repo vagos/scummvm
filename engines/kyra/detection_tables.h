@@ -69,6 +69,8 @@ namespace {
 #define EOB_PC98_FLAGS FLAGS(false, false, false, false, true, true, false, false, false, Kyra::GI_EOB1)
 #define EOB2_FLAGS FLAGS(false, false, false, false, false, false, false, false, false, Kyra::GI_EOB2)
 #define EOB2_FMTOWNS_FLAGS FLAGS(false, false, false, false, true, false, true, false, false, Kyra::GI_EOB2)
+#define EOB2_PC98_FLAGS FLAGS(false, false, false, false, true, false, false, false, false, Kyra::GI_EOB2)
+#define EOB2_TALKIE_FLAGS FLAGS(false, false, true, false, false, false, false, false, false, Kyra::GI_EOB2)
 
 static const char msg_missingLangResources[]			= _s("Missing language specific game code and/or resources.");
 static const char msg_fanTrans_missingLangResources[]	= _s("Missing language specific game code and/or resources for this fan translation.");
@@ -675,14 +677,14 @@ const KYRAGameDescription adGameDescs[] = {
 		KYRA2_FLOPPY_FLAGS
 	},
 
-	{ // Floppy version extracted. Bugreport #7666
+	{ // Floppy version extracted
 		{
 			"kyra2",
-			msg_fanTrans_missingLangResources, // Reason for being unsupported
+			"Extracted",
 			AD_ENTRY1s("FATE.PAK", "ac81bcd4aa6e0921a87eb099827a8b06", 107309),
 			Common::PL_POL,
 			Common::kPlatformDOS,
-			ADGF_UNSUPPORTED,
+			ADGF_NO_FLAGS,
 			GUIO6(GUIO_NOSPEECH, GUIO_MIDIADLIB, GUIO_MIDIMT32, GUIO_MIDIGM, GUIO_MIDIPCSPK, GUIO_RENDERVGA)
 		},
 		KYRA2_FLOPPY_FLAGS
@@ -1732,12 +1734,12 @@ const KYRAGameDescription adGameDescs[] = {
 			"Extracted",
 			AD_ENTRY2s("GENERAL.PAK",  "f2c305bfb10c08371e947ab4d0a2f5f5", -1,
 					   "CHAPTER7.PAK", "f3cbab6d945ceda35149a5c9a324a8fe", -1),
-			Common::ZH_CHN,
+			Common::ZH_TWN,
 			Common::kPlatformDOS,
 			ADGF_NO_FLAGS,
 			GUIO9(GUIO_NOSPEECH, GUIO_MIDIADLIB, GUIO_MIDIMT32, GUIO_MIDIGM, GUIO_MIDIPCSPK, GUIO_RENDERVGA, GAMEOPTION_LOL_SCROLLING, GAMEOPTION_LOL_CURSORS, GAMEOPTION_LOL_SAVENAMES)
 		},
-		LOL_FLOPPY_FLAGS
+		LOL_FLOPPY_FAN_FLAGS(Common::ZH_TWN, Common::EN_ANY)
 	},
 
 	{ // German version - Bug 9557
@@ -2053,14 +2055,14 @@ const KYRAGameDescription adGameDescs[] = {
 	{
 		{
 			"eob2",
-			msg_missingLangResources, // Reason for being unsupported
+			0,
 			AD_ENTRY1s("LEVEL15.INF", "f972f628d21bae404a7d52bb287c0012", -1),
-			Common::ZH_ANY,
+			Common::ZH_TWN,
 			Common::kPlatformDOS,
-			ADGF_UNSUPPORTED,
-			GUIO7(GUIO_NOSPEECH, GUIO_MIDIADLIB, GUIO_MIDIPCSPK, GUIO_RENDERVGA, GUIO_RENDEREGA, GAMEOPTION_EOB_HPGRAPHS, GAMEOPTION_EOB_MOUSESWAP)
+			ADGF_NO_FLAGS,
+			GUIO6(GUIO_MIDIADLIB, GUIO_MIDIPCSPK, GUIO_RENDERVGA, GUIO_RENDEREGA, GAMEOPTION_EOB_HPGRAPHS, GAMEOPTION_EOB_MOUSESWAP)
 		},
-		EOB2_FLAGS
+		EOB2_TALKIE_FLAGS
 	},
 
 	{
@@ -2100,6 +2102,22 @@ const KYRAGameDescription adGameDescs[] = {
 			GUIO5(GUIO_NOSPEECH, GUIO_MIDIAMIGA, GUIO_RENDERAMIGA, GAMEOPTION_EOB_HPGRAPHS, GAMEOPTION_EOB_MOUSESWAP)
 		},
 		EOB2_FLAGS
+	},
+
+	{
+		{
+			"eob2",
+			0,
+			{
+				{ "AAD_LOGO.CPS", 0, "a0951ff3cce7fcbd57b8152278eac3eb", -1 },
+				{ 0, 0, 0, 0 }
+			},
+				Common::JA_JPN,
+				Common::kPlatformPC98,
+				ADGF_NO_FLAGS,
+				GUIO7(GUIO_NOSPEECH, GUIO_MIDIPC98, GUIO_MIDIMT32, GUIO_MIDIGM, GUIO_RENDERPC9821, GUIO_RENDERPC9801, GAMEOPTION_EOB_HPGRAPHS)
+		},
+		EOB2_PC98_FLAGS
 	},
 
 	{ AD_TABLE_END_MARKER, FLAGS(0, 0, 0, 0, 0, 0, 0, 0, 0, 0) }

@@ -60,6 +60,8 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 
 	_variant = gd->flags;
 
+	_language = Common::parseLanguage(ConfMan.get("language"));
+
 	if (!Common::parseBool(ConfMan.get("prerecorded_sounds"), _usePrerecordedSounds))
 		error("Failed to parse bool from prerecorded_sounds option");
 
@@ -165,7 +167,6 @@ FreescapeEngine::~FreescapeEngine() {
 		delete _border;
 	}
 
-
 	if (_gfx->_isAccelerated) {
 		delete _borderTexture;
 		delete _uiTexture;
@@ -267,9 +268,9 @@ void FreescapeEngine::takeDamageFromSensor() {
 
 void FreescapeEngine::drawBackground() {
 	_gfx->setViewport(_fullscreenViewArea);
-	_gfx->clear(_currentArea->_usualBackgroundColor);
+	_gfx->drawBackground(_currentArea->_usualBackgroundColor);
 	_gfx->setViewport(_viewArea);
-	_gfx->clear(_currentArea->_skyColor);
+	_gfx->drawBackground(_currentArea->_skyColor);
 }
 
 void FreescapeEngine::drawFrame() {
@@ -277,16 +278,17 @@ void FreescapeEngine::drawFrame() {
 	_gfx->positionCamera(_position, _position + _cameraFront);
 
 	if (_underFireFrames > 0) {
-		int underFireColor = isDriller() && isDOS() ? 1
-							: _currentArea->_underFireBackgroundColor;
-		if (underFireColor < 16) {
-			_currentArea->remapColor(_currentArea->_usualBackgroundColor, underFireColor);
-			_currentArea->remapColor(_currentArea->_skyColor, underFireColor);
-		}
+		int underFireColor = _currentArea->_underFireBackgroundColor;
+
+		if (isDriller() && (isDOS() || isAmiga() || isAtariST()))
+			underFireColor = 1;
+
+		_currentArea->remapColor(_currentArea->_usualBackgroundColor, underFireColor);
+		_currentArea->remapColor(_currentArea->_skyColor, underFireColor);
 	}
 
 	drawBackground();
-	_currentArea->draw(_gfx);
+	_currentArea->draw(_gfx, _ticks);
 
 	if (_underFireFrames > 0) {
 		for (auto &it : _sensors) {
@@ -464,34 +466,9 @@ void FreescapeEngine::processInput() {
 				g_system->warpMouse(mousePos.x, mousePos.y);
 
 			if (_shootMode) {
-				{
-					bool shouldWarp = false;
-					_crossairPosition = mousePos;
-					if (mousePos.x < _viewArea.left) {
-						_crossairPosition.x = _viewArea.left + 1;
-						shouldWarp = true;
-					}
-
-					if  (mousePos.x > _viewArea.right) {
-						_crossairPosition.x = _viewArea.right - 1;
-						shouldWarp = true;
-					}
-					if (mousePos.y < _viewArea.top) {
-						_crossairPosition.y =  _viewArea.top + 1;
-						shouldWarp = true;
-					}
-
-					if  (mousePos.y > _viewArea.bottom) {
-						_crossairPosition.y = _viewArea.bottom - 1;
-						shouldWarp = true;
-					}
-
-					if (shouldWarp) {
-						g_system->warpMouse(_crossairPosition.x, _crossairPosition.y);
-						g_system->getEventManager()->purgeMouseEvents();
-						g_system->getEventManager()->purgeKeyboardEvents();
-					}
-				}
+				Common::Point resolution = _gfx->nativeResolution();
+				_crossairPosition.x = _screenW * mousePos.x / resolution.x;
+				_crossairPosition.y = _screenH * mousePos.y / resolution.y;
 				break;
 			}
 
@@ -505,13 +482,20 @@ void FreescapeEngine::processInput() {
 			{
 				bool touchedScreenControls = false;
 
-				#if defined(__ANDROID__) || defined(IPHONE)
+				Common::Point resolution = _gfx->nativeResolution();
+				mousePos.x = _screenW * mousePos.x / resolution.x;
+				mousePos.y = _screenH * mousePos.y / resolution.y;
 				touchedScreenControls = onScreenControls(mousePos);
-				#endif
 
 				if (!touchedScreenControls && _viewArea.contains(_crossairPosition))
 					shoot();
 			}
+			break;
+
+		case Common::EVENT_RBUTTONDOWN:
+			if (_hasFallen || !isCastle())
+				break;
+			activate();
 			break;
 
 		default:
@@ -644,7 +628,7 @@ void FreescapeEngine::processBorder() {
 
 		for (int i = 0; i < border->w; i++) {
 			for (int j = 0; j < border->h; j++) {
-				if (border->getPixel(i, j) == black)
+				if (!isCastle() && border->getPixel(i, j) == black)
 					border->setPixel(i, j, transparent);
 			}
 		}
@@ -721,15 +705,20 @@ void FreescapeEngine::drawStringInSurface(const Common::String &str, int x, int 
 	Common::String ustr = str;
 	ustr.toUppercase();
 
+	int sizeX = 8;
+	int sizeY = isCastle() ? 8 : 6;
+	int sep = isCastle() ? 9 : 8;
+	int additional = isCastle() ? 0 : 1;
+
 	if (isDOS() || isSpectrum() || isCPC() || isC64()) {
 		for (uint32 c = 0; c < ustr.size(); c++) {
 			assert(ustr[c] >= 32);
-			for (int j = 0; j < 6; j++) {
-				for (int i = 0; i < 8; i++) {
-					if (_font.get(48 * (offset + ustr[c] - 32) + 1 + j * 8 + i))
-						surface->setPixel(x + 8 - i + 8 * c, y + j, fontColor);
+			for (int j = 0; j < sizeY; j++) {
+				for (int i = 0; i < sizeX; i++) {
+					if (_font.get(sizeX * sizeY * (offset + ustr[c] - 32) + additional + j * 8 + i))
+						surface->setPixel(x + 8 - i + sep * c, y + j, fontColor);
 					else
-						surface->setPixel(x + 8 - i + 8 * c, y + j, backColor);
+						surface->setPixel(x + 8 - i + sep * c, y + j, backColor);
 				}
 			}
 		}

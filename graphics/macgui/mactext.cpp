@@ -76,9 +76,9 @@ Common::CodePage MacFontRun::getEncoding() {
 
 bool MacFontRun::plainByteMode() {
 	Common::CodePage encoding = getEncoding();
-	// This return statement accounts for utf8, invalid, and Mac Roman.
+	// This return statement accounts for utf8, invalid.
 	// For future Unicode font compatibility, it should account for all codepages instead.
-	return encoding != Common::kUtf8 && encoding != Common::kCodePageInvalid && encoding != Common::kMacRoman;
+	return encoding != Common::kUtf8 && encoding != Common::kCodePageInvalid;
 }
 
 Common::String MacFontRun::getEncodedText() {
@@ -1039,8 +1039,6 @@ int MacText::getLineWidth(int line, bool enforce, int col) {
 		height = MAX(height, _textLines[line].chunks[i].getFont()->getFontHeight());
 	}
 
-	if (!hastext && _textLines.size() > 1)
-		height = height > 3 ? height - 3 : 0;
 
 	_textLines[line].width = width;
 	_textLines[line].height = height;

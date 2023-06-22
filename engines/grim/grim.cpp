@@ -282,7 +282,8 @@ GfxBase *GrimEngine::createRenderer(int screenW, int screenH) {
 	}
 
 	// Not supported yet.
-	if (getLanguage() == Common::Language::ZH_CHN)
+	if (getLanguage() == Common::Language::ZH_CHN || getLanguage() == Common::Language::ZH_TWN
+		|| getGameLanguage() == Common::Language::ZH_CHN || getGameLanguage() == Common::Language::ZH_TWN)
 		availableRendererTypes &= ~Graphics::kRendererTypeOpenGLShaders;
 
 	Graphics::RendererType matchingRendererType = Graphics::Renderer::getBestMatchingType(desiredRendererType, availableRendererTypes);
@@ -333,13 +334,13 @@ Common::Error GrimEngine::run() {
 	// Currently, this requires the data fork to be standalone
 	if (getGameType() == GType_MONKEY4) {
 		if (SearchMan.hasFile("Monkey Island 4 Installer")) {
-			Common::Archive *archive = Common::createStuffItArchive("Monkey Island 4 Installer");
+			Common::Archive *archive = Common::createStuffItArchive("Monkey Island 4 Installer", true);
 
 			if (archive)
 				SearchMan.add("Monkey Island 4 Installer", archive, 0, true);
 		}
 		if (SearchMan.hasFile("EFMI Installer")) {
-			Common::Archive *archive = Common::createStuffItArchive("EFMI Installer");
+			Common::Archive *archive = Common::createStuffItArchive("EFMI Installer", true);
 
 			if (archive)
 				SearchMan.add("EFMI Installer", archive, 0, true);
@@ -393,6 +394,15 @@ Common::Error GrimEngine::run() {
 		g_driver = createRenderer(1600, 900);
 	} else {
 		g_driver = createRenderer(640, 480);
+	}
+
+	if (getGameType() == GType_MONKEY4 && getGameLanguage() == Common::Language::ZH_TWN) {
+		Common::File img, imgmap;
+		if (img.open("font.tga") && imgmap.open("map.bin")) {
+			BitmapFont *f = new BitmapFont();
+			f->loadTGA("font.tga", &imgmap, &img);
+			_overrideFont = f;
+		}
 	}
 
 	if (getGameType() == GType_MONKEY4 && SearchMan.hasFile("AMWI.m4b")) {
@@ -1704,6 +1714,10 @@ bool GrimEngine::isCutsceneEnabled(uint32 number) const {
 void GrimEngine::enableCutscene(uint32 number) {
 	assert (number < kNumCutscenes);
 	_cutsceneEnabled[number] = true;
+}
+
+Graphics::RendererType GrimEngine::getRendererType() {
+	return g_driver->type;
 }
 
 void GrimEngine::setSaveMetaData(const char *meta1, int meta2, const char *meta3) {

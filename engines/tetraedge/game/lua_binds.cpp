@@ -28,8 +28,10 @@
 #include "tetraedge/game/lua_binds.h"
 #include "tetraedge/game/object3d.h"
 #include "tetraedge/game/syberia_game.h"
+#include "tetraedge/game/amerzone_game.h"
 #include "tetraedge/to_lua.h"
 #include "tetraedge/te/te_core.h"
+#include "tetraedge/te/te_sound_manager.h"
 #include "tetraedge/te/te_lua_thread.h"
 #include "tetraedge/te/te_particle.h"
 
@@ -77,10 +79,20 @@ static int tolua_ExportedFunctions_LoadObjectMaterials01(lua_State *L) {
 	return tolua_ExportedFunctions_LoadObjectMaterials00(L);
 }
 
-static void PlayMovie(const Common::String &vidpath, const Common::String &musicpath) {
+static void PlayMovie(Common::String vidpath, Common::String musicpath) {
 	Application *app = g_engine->getApplication();
 	app->mouseCursorLayout().load(app->defaultCursor());
 	Game *game = g_engine->getGame();
+
+	// WORKAROUND: Fix some broken paths in Amerzone
+	if (musicpath == "Videos/sc19.ogg")
+		musicpath = "Videos/019.ogg";
+	if (vidpath == "Videos/sc18.ogv") {
+		// Need the correct path for callback, call this first.
+		game->playMovie(vidpath, musicpath);
+		vidpath = "Videos/I_018_P2_001.ogv";
+	}
+
 	game->playMovie(vidpath, musicpath);
 }
 
@@ -118,7 +130,7 @@ static int tolua_ExportedFunctions_PlayMovie00(lua_State *L) {
 		// iOS version.. sometimes has "video" as 3rd param?
 		Common::String s1(tolua_tostring(L, 1, nullptr));
 		Common::String s2(tolua_tostring(L, 2, nullptr));
-		Common::String s3(tolua_tostring(L, 2, nullptr));
+		Common::String s3(tolua_tostring(L, 3, nullptr));
 		PlayMovie(s1, s2);
 		return 0;
 	}
@@ -203,10 +215,20 @@ static int tolua_ExportedFunctions_Selected00(lua_State *L) {
 	error("#ferror in function 'Selected': %d %d %s", err.index, err.array, err.type);
 }
 
-static void TakeObject(const Common::String &obj) {
+static void TakeObject_Amerzone(const Common::String &obj) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game && game->warpY());
+	debug("TakeObject: lastObj %s, obj %s", game->lastHitObjectName().c_str(), obj.c_str());
+	game->luaContext().setGlobal(game->lastHitObjectName(), true);
+	game->warpY()->takeObject(game->lastHitObjectName());
+	if (!obj.empty()) {
+		game->addToBag(obj);
+		g_engine->getSoundManager()->playFreeSound("Sounds/SFX/N_prendre.ogg", 1.0, "sfx");
+	}
+}
+
+static void TakeObject_Syberia(const Common::String &obj) {
 	Game *game = g_engine->getGame();
-	// TODO: Set global _lastHitObjectName?? How is it used?
-	//game->luaContext().setGlobal(_lastHitObjectName, true);
 	if (!obj.empty())
 		game->addToBag(obj);
 }
@@ -215,7 +237,10 @@ static int tolua_ExportedFunctions_TakeObject00(lua_State *L) {
 	tolua_Error err;
 	if (tolua_isstring(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
 		Common::String s1(tolua_tostring(L, 1, nullptr));
-		TakeObject(s1);
+		if (g_engine->gameIsAmerzone())
+			TakeObject_Amerzone(s1);
+		else
+			TakeObject_Syberia(s1);
 		return 0;
 	}
 	error("#ferror in function 'TakeObject': %d %d %s", err.index, err.array, err.type);
@@ -427,6 +452,11 @@ static int tolua_ExportedFunctions_ChangeWarp00(lua_State *L) {
 		Common::String s2(tolua_tostring(L, 2, nullptr));
 		bool flag = tolua_toboolean(L, 3, false);
 		ChangeWarp(s1, s2, flag);
+		return 0;
+	} else if (g_engine->gameIsAmerzone() && tolua_isstring(L, 1, 0, &err) && tolua_isboolean(L, 2, 1, &err) && tolua_isnoobj(L, 3, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		bool flag = tolua_toboolean(L, 2, false);
+		ChangeWarp(s1, "", flag);
 		return 0;
 	}
 	error("#ferror in function 'ChangeWarp': %d %d %s", err.index, err.array, err.type);
@@ -685,7 +715,7 @@ static int tolua_ExportedFunctions_SetVisibleCellphone00(lua_State *L) {
 
 static void ShowObject(const Common::String &objName);
 
-static void StartAnimation(const Common::String name, int loops, bool repeat) {
+static void StartAnimation(const Common::String &name, int loops, bool repeat) {
 	ShowObject(name);
 	Game *game = g_engine->getGame();
 	if (game->startAnimation(name, loops, repeat))
@@ -898,7 +928,7 @@ static int tolua_ExportedFunctions_PlaceCharacterOnDummy00(lua_State *L) {
 }
 
 static void SetCharacterRotation(const Common::String &charname, float rx, float ry, float rz) {
-	TeQuaternion quat = TeQuaternion::fromEuler(TeVector3f32(rx * M_PI / 180.0, ry * M_PI / 180.0, rz * M_PI / 180.0));
+	const TeQuaternion quat = TeQuaternion::fromEulerDegrees(TeVector3f32(rx, ry, rz));
 	Game *game = g_engine->getGame();
 	Character *c = game->scene().character(charname);
 	if (c) {
@@ -1120,8 +1150,7 @@ static void SetGroundObjectRotation(const Common::String &objname, float x, floa
 		return;
 	}
 
-	TeVector3f32 rotvec(x * M_PI / 180.0, y * M_PI / 180.0, z * M_PI / 180.0);
-	obj->model()->setRotation(TeQuaternion::fromEuler(rotvec));
+	obj->model()->setRotation(TeQuaternion::fromEulerDegrees(TeVector3f32(x, y, z)));
 	obj->model()->setVisible(true);
 }
 
@@ -1173,8 +1202,7 @@ static void RotateGroundObject(const Common::String &name, float x, float y, flo
 	Object3D *obj = game->scene().object3D(name);
 	if (!obj)
 		error("[RotateGroundObject] Object not found %s", name.c_str());
-	TeQuaternion rot = obj->model()->rotation();
-	obj->_rotateStart = rot;
+	obj->_rotateStart = obj->model()->rotation();
 	obj->_rotateAmount = TeVector3f32(x, y, z);
 	obj->_rotateTimer.start();
 	obj->_rotateTime = time;
@@ -1985,8 +2013,10 @@ static void PlayMusic(const Common::String &path, float volume) {
 	// very slightly different to original because we can't
 	// change repeat value after starting.
 	music.stop();
-	music.repeat(false);
+	music.repeat(g_engine->gameIsAmerzone());
 	music.load(path);
+	if (!g_engine->getApplication()->musicOn())
+		return;
 	music.play();
 	music.volume(volume);
 }
@@ -2034,8 +2064,7 @@ static void SetObjectRotation(const Common::String &obj, float xr, float yr, flo
 		warning("[SetObjectRotation] Object not found %s", obj.c_str());
 		return;
 	}
-	const TeVector3f32 rot(xr * M_PI / 180.0, yr * M_PI / 180.0, zr * M_PI / 180.0);
-	obj3d->_objRotation = TeQuaternion::fromEuler(rot);
+	obj3d->_objRotation = TeQuaternion::fromEulerDegrees(TeVector3f32(xr, yr, zr));
 }
 
 static int tolua_ExportedFunctions_SetObjectRotation00(lua_State *L) {
@@ -2651,7 +2680,7 @@ static int tolua_EnableParticle(lua_State *L) {
 
 
 
-void LuaOpenBinds(lua_State *L) {
+static void LuaOpenBinds_Syberia(lua_State *L) {
 	tolua_open(L);
 	tolua_module(L, 0, 0);
 	tolua_beginmodule(L, 0);
@@ -2826,6 +2855,238 @@ void LuaOpenBinds(lua_State *L) {
 
 	tolua_endmodule(L);
 }
+
+// ======== Amerzone-specific bind functions below ========
+
+static int tolua_ExportedFunctions_PrintDebugMessage00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		debug("%s", s1.c_str());
+		return 0;
+	}
+	error("#ferror in function 'PrintDebugMessage': %d %d %s", err.index, err.array, err.type);
+}
+
+static void PutObject(const Common::String &name, bool enable) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	game->warpY()->putObject(name, enable);
+}
+
+static int tolua_ExportedFunctions_PutObject00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isboolean(L, 2, 1, &err)
+			&& tolua_isnoobj(L, 3, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		bool b1 = tolua_toboolean(L, 2, 1);
+		PutObject(s1, b1);
+		return 0;
+	}
+	error("#ferror in function 'PutObject': %d %d %s", err.index, err.array, err.type);
+}
+
+static void StartAnimationPart(const Common::String &name, int startFrame, int endFrame, int repCount, bool flag) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	// Note parameter order changes
+	game->warpY()->startAnimationPart(name, repCount, startFrame, endFrame, flag);
+}
+
+static int tolua_ExportedFunctions_StartAnimationPart00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnumber(L, 2, 0, &err)
+		&& tolua_isnumber(L, 3, 0, &err) && tolua_isnumber(L, 4, 1, &err)
+		&& tolua_isboolean(L, 5, 1, &err) && tolua_isnoobj(L, 6, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		double d1 = tolua_tonumber(L, 2, 0.0);
+		double d2 = tolua_tonumber(L, 3, 0.0);
+		double d3 = tolua_tonumber(L, 4, -1.0);
+		bool b1 = tolua_tonumber(L, 5, 0);
+		StartAnimationPart(s1, (int)d1, (int)d2, (int)d3, b1);
+		return 0;
+	}
+	error("#ferror in function 'SetAnimationPart': %d %d %s", err.index, err.array, err.type);
+}
+
+static void RemoveObject_Amerzone(const Common::String &name) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	game->warpY()->takeObject(name);
+}
+
+static int tolua_ExportedFunctions_RemoveObject00_Amerzone(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		RemoveObject_Amerzone(s1);
+		return 0;
+	}
+	error("#ferror in function 'RemoveObject': %d %d %s", err.index, err.array, err.type);
+}
+
+static void AddToBag(const Common::String &name) {
+	Game *game = g_engine->getGame();
+	game->addToBag(name);
+	TeSoundManager *sndMgr = g_engine->getSoundManager();
+	sndMgr->playFreeSound("Sounds/SFX/N_prendre.ogg");
+}
+
+static int tolua_ExportedFunctions_AddToBag00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		AddToBag(s1);
+		return 0;
+	}
+	error("#ferror in function 'AddToBag': %d %d %s", err.index, err.array, err.type);
+}
+
+void SaveGame(const Common::String &name) {
+	g_engine->getGame()->saveBackup(name);
+}
+
+static int tolua_ExportedFunctions_SaveGame00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		SaveGame(s1);
+		return 0;
+	}
+	error("#ferror in function 'SaveGame': %d %d %s", err.index, err.array, err.type);
+}
+
+static void SetMarker(const Common::String &name, int imgNo, long markerId) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	game->warpY()->configMarker(name, imgNo, markerId);
+}
+
+static int tolua_ExportedFunctions_SetMarker00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isstring(L, 1, 0, &err) && tolua_isnumber(L, 2, 0, &err)
+		&& tolua_isnumber(L, 3, 0, &err) && tolua_isnoobj(L, 4, &err)) {
+		Common::String s1(tolua_tostring(L, 1, nullptr));
+		double d1 = tolua_tonumber(L, 2, 0.0);
+		double d2 = tolua_tonumber(L, 3, 0.0);
+		SetMarker(s1, (int)d1, (long)d2);
+		return 0;
+	}
+	error("#ferror in function 'SetMarker': %d %d %s", err.index, err.array, err.type);
+}
+
+static void LookAt(int x, int y) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	// Note: Reverse the angles to what the game does, because we apply them
+	// using fromEuler.
+	game->setAngleX(x);
+	int yval = y - 360;
+	if (y < 90)
+		yval = y;
+	game->setAngleY(yval);
+}
+
+static int tolua_ExportedFunctions_LookAt00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isnumber(L, 1, 0, &err) && tolua_isnumber(L, 2, 0, &err)
+			&& tolua_isnoobj(L, 3, &err)) {
+		double d1 = tolua_tonumber(L, 1, 0.0);
+		double d2 = tolua_tonumber(L, 2, 0.0);
+		LookAt((int)d1, (int)d2);
+		return 0;
+	}
+	error("#ferror in function 'LookAt': %d %d %s", err.index, err.array, err.type);
+}
+
+static void ShowPuzzle(int x, int y = 0, int z = 0) {
+	AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(g_engine->getGame());
+	assert(game);
+	game->showPuzzle(x, y, z);
+}
+
+static int tolua_ExportedFunctions_ShowPuzzle00(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isnumber(L, 1, 0, &err) && tolua_isnoobj(L, 2, &err)) {
+		double d1 = tolua_tonumber(L, 1, 0.0);
+		ShowPuzzle((int)d1);
+		return 0;
+	}
+	error("#ferror in function 'ShowPuzzle': %d %d %s", err.index, err.array, err.type);
+}
+
+static int tolua_ExportedFunctions_ShowPuzzle01(lua_State *L) {
+	tolua_Error err;
+	if (tolua_isnumber(L, 1, 0, &err) && tolua_isnumber(L, 2, 0, &err)
+			&& tolua_isnumber(L, 3, 0, &err) && tolua_isnoobj(L, 4, &err)) {
+		double d1 = tolua_tonumber(L, 1, 0.0);
+		double d2 = tolua_tonumber(L, 2, 0.0);
+		double d3 = tolua_tonumber(L, 3, 0.0);
+		ShowPuzzle((int)d1, (int)d2, (int)d3);
+		return 0;
+	}
+	return tolua_ExportedFunctions_ShowPuzzle00(L);
+}
+
+
+static void LuaOpenBinds_Amerzone(lua_State *L) {
+	tolua_open(L);
+	tolua_module(L, 0, 0);
+	tolua_beginmodule(L, 0);
+
+	tolua_function(L, "Selected", tolua_ExportedFunctions_Selected00);
+	//tolua_function(L, "TestObjectLimit", tolua_ExportedFunctions_TestObjectLimit00); // unused
+	tolua_function(L, "PrintDebugMessage", tolua_ExportedFunctions_PrintDebugMessage00);
+	//tolua_function(L, "SetCondition", tolua_ExportedFunctions_SetCondition00); // unused
+	//tolua_function(L, "UnsetCondition", tolua_ExportedFunctions_UnsetCondition00); // unused
+	tolua_function(L, "TakeObject", tolua_ExportedFunctions_TakeObject00);
+	tolua_function(L, "PutObject", tolua_ExportedFunctions_PutObject00);
+	// This is not the same as RemoveObject from Syberia.
+	tolua_function(L, "RemoveObject", tolua_ExportedFunctions_RemoveObject00_Amerzone);
+	tolua_function(L, "StartAnimationPart", tolua_ExportedFunctions_StartAnimationPart00);
+	//tolua_function(L, "StartAnimation", tolua_ExportedFunctions_StartAnimation00); // unused
+	//tolua_function(L, "AnimationSetToEnd", tolua_ExportedFunctions_AnimationSetToEnd00); // unused
+	//tolua_function(L, "AnimationSetToStart", tolua_ExportedFunctions_AnimationSetToStart00); // unused
+	//tolua_function(L, "DrawText", tolua_ExportedFunctions_DrawText00); // unused
+	tolua_function(L, "ChangeWarp", tolua_ExportedFunctions_ChangeWarp00);
+	tolua_function(L, "AddToBag", tolua_ExportedFunctions_AddToBag00);
+	// Note: same as RemoveObject in Syberia
+	tolua_function(L, "RemoveFromBag", tolua_ExportedFunctions_RemoveObject00);
+	tolua_function(L, "RemoveFromBag", tolua_ExportedFunctions_RemoveObject01);
+	tolua_function(L, "SaveGame", tolua_ExportedFunctions_SaveGame00);
+	tolua_function(L, "SetMarker", tolua_ExportedFunctions_SetMarker00);
+	tolua_function(L, "LookAt", tolua_ExportedFunctions_LookAt00);
+	//tolua_function(L, "Wait", tolua_ExportedFunctions_Wait00); // unused
+	tolua_function(L, "PlaySound", tolua_ExportedFunctions_PlaySound00);
+	tolua_function(L, "StopSound", tolua_ExportedFunctions_StopSound00);
+	tolua_function(L, "PlayMusic", tolua_ExportedFunctions_PlayMusic00);
+	tolua_function(L, "ShowPuzzle", tolua_ExportedFunctions_ShowPuzzle00);
+	tolua_function(L, "ShowPuzzle", tolua_ExportedFunctions_ShowPuzzle01);
+	tolua_function(L, "PlayMovie", tolua_ExportedFunctions_PlayMovie00);
+	//tolua_function(L, "SetFOV", tolua_ExportedFunctions_SetFOV00); // unused
+	//tolua_function(L, "LoadSprite", tolua_ExportedFunctions_LoadSprite00); // unused
+	//tolua_function(L, "UnloadSprite", tolua_ExportedFunctions_UnloadSprite00); // unused
+	//tolua_function(L, "PushAnswer", tolua_ExportedFunctions_PushAnswer00); // unused
+	tolua_function(L, "FinishGame", tolua_ExportedFunctions_FinishGame00);
+	tolua_function(L, "ShowDocument", tolua_ExportedFunctions_ShowDocument00);
+	tolua_function(L, "HideDocument", tolua_ExportedFunctions_HideDocument00);
+	tolua_function(L, "AddDocument", tolua_ExportedFunctions_AddDocument00);
+	//tolua_function(L, "ClearImportantDocuments", tolua_ExportedFunctions_ClearImportantDocuments00); // unused
+	//tolua_function(L, "SetImportantDocument", tolua_ExportedFunctions_SetImportantDocument00); // unused
+	tolua_function(L, "TestFileFlagSystemFlag", tolua_ExportedFunctions_TestFileFlagSystemFlag00);
+	//tolua_function(L, "SetViewAngleXLimits", tolua_ExportedFunctions_SetViewAngleXLimits00); // unused
+	//tolua_function(L, "SetViewAngleYLimits", tolua_ExportedFunctions_SetViewAngleYLimits00); // unused
+
+	tolua_endmodule(L);
+}
+
+void LuaOpenBinds(lua_State *L) {
+	if (g_engine->gameIsAmerzone())
+		LuaOpenBinds_Amerzone(L);
+	else
+		LuaOpenBinds_Syberia(L);
+}
+
 
 }
 

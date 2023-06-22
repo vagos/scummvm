@@ -31,12 +31,23 @@ namespace Interactions {
 
 Prisoner::Prisoner(const Common::String &name, int portrait, const Common::String &line1,
 		byte flag, Alignment freeAlignment, Alignment leaveAlignment) :
-		Interaction(name, portrait), _flag(flag),
+		Interaction(name, portrait), _line(line1), _flag(flag),
 		_freeAlignment(freeAlignment), _leaveAlignment(leaveAlignment) {
-	addText(line1);
-	addButton(STRING["maps.prisoners.options1"], '1');
-	addButton(STRING["maps.prisoners.options2"], '2');
-	addButton(STRING["maps.prisoners.options3"], '3');
+	_title = STRING["maps.eprisoners.title"];
+}
+
+bool Prisoner::msgFocus(const FocusMessage &msg) {
+	Interaction::msgFocus(msg);
+
+	addText(_line);
+	clearButtons();
+	addButton(STRING["maps.eprisoners.options1"], '1');
+	addButton(STRING["maps.eprisoners.options2"], '2');
+	addButton(STRING["maps.eprisoners.options3"], '3');
+
+	// Since the prisoner options are 1 to 3, disable party bindings
+	MetaEngine::setKeybindingMode(KeybindingMode::KBMODE_MENUS);
+	return true;
 }
 
 bool Prisoner::msgKeypress(const KeypressMessage &msg) {
@@ -77,10 +88,12 @@ bool Prisoner::msgKeypress(const KeypressMessage &msg) {
 	}
 
 	if (align != NEUTRAL) {
-		clearSurface();
-		writeString(0, 1, line);
-		Sound::sound(SOUND_2);
+		clearButtons();
+		addText(line);
+		redraw();
+
 		delaySeconds(3);
+		Sound::sound(SOUND_2);
 
 	} else {
 		close();
@@ -96,22 +109,23 @@ void Prisoner::timeout() {
 /*------------------------------------------------------------------------*/
 
 ChildPrisoner::ChildPrisoner() :
-		Prisoner("ChildPrisoner", 1, STRING["maps.prisoners.child"],
+		Prisoner("ChildPrisoner", 34, STRING["maps.prisoners.child"],
 		CHARFLAG1_4, GOOD, EVIL) {
 }
 
 ManPrisoner::ManPrisoner() :
-	Prisoner("ManPrisoner", 1, STRING["maps.prisoners.man"],
+	Prisoner("ManPrisoner", 23, STRING["maps.prisoners.man"],
 	CHARFLAG1_20, EVIL, GOOD) {
 }
 
 CloakedPrisoner::CloakedPrisoner() :
-	Prisoner("CloakedPrisoner", 1, STRING["maps.prisoners.cloaked"],
+	Prisoner("CloakedPrisoner", 16, STRING["maps.prisoners.cloaked"],
 		CHARFLAG1_40, EVIL, GOOD) {
+	_animated = false;
 }
 
 DemonPrisoner::DemonPrisoner() :
-	Prisoner("DemonPrisoner", 1, STRING["maps.prisoners.demon"],
+	Prisoner("DemonPrisoner", 41, STRING["maps.prisoners.demon"],
 		CHARFLAG1_10, EVIL, GOOD) {
 }
 
@@ -121,7 +135,7 @@ MutatedPrisoner::MutatedPrisoner() :
 }
 
 MaidenPrisoner::MaidenPrisoner() :
-	Prisoner("MaidenPrisoner", 1, STRING["maps.prisoners.maiden"],
+	Prisoner("MaidenPrisoner", 2, STRING["maps.prisoners.maiden"],
 		CHARFLAG1_8, GOOD, EVIL) {
 }
 

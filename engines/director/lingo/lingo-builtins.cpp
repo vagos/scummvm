@@ -30,7 +30,6 @@
 
 #include "director/director.h"
 #include "director/cast.h"
-#include "director/castmember.h"
 #include "director/frame.h"
 #include "director/movie.h"
 #include "director/score.h"
@@ -41,6 +40,10 @@
 #include "director/window.h"
 #include "director/stxt.h"
 #include "director/util.h"
+#include "director/castmember/castmember.h"
+#include "director/castmember/bitmap.h"
+#include "director/castmember/palette.h"
+#include "director/castmember/text.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-builtins.h"
 #include "director/lingo/lingo-code.h"
@@ -76,31 +79,31 @@ static BuiltinProto builtins[] = {
 	{ "string",			LB::b_string,		1, 1, 200, FBLTIN },	// D2 f
 	{ "value",		 	LB::b_value,		1, 1, 200, FBLTIN },	// D2 f
 	// Lists
-	{ "add",			LB::b_add,			2, 2, 400, HBLTIN },	//			D4 handler
-	{ "addAt",			LB::b_addAt,		3, 3, 400, HBLTIN },	//			D4 h
-	{ "addProp",		LB::b_addProp,		3, 3, 400, HBLTIN },	//			D4 h
-	{ "append",			LB::b_append,		2, 2, 400, HBLTIN },	//			D4 h
-	{ "count",			LB::b_count,		1, 1, 400, FBLTIN },	//			D4 f
-	{ "deleteAt",		LB::b_deleteAt,		2, 2, 400, HBLTIN },	//			D4 h
-	{ "deleteOne",		LB::b_deleteOne,	2, 2, 400, HBLTIN },	//			D4 h, undocumented?
-	{ "deleteProp",		LB::b_deleteProp,	2, 2, 400, HBLTIN },	//			D4 h
-	{ "findPos",		LB::b_findPos,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "findPosNear",	LB::b_findPosNear,	2, 2, 400, FBLTIN },	//			D4 f
-	{ "getaProp",		LB::b_getaProp,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "getAt",			LB::b_getAt,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "getLast",		LB::b_getLast,		1, 1, 400, FBLTIN },	//			D4 f
-	{ "getOne",			LB::b_getOne,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "getPos",			LB::b_getPos,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "getProp",		LB::b_getProp,		2, 2, 400, FBLTIN },	//			D4 f
-	{ "getPropAt",		LB::b_getPropAt,	2, 2, 400, FBLTIN },	//			D4 f
-	{ "list",			LB::b_list,			-1, 0, 400, FBLTIN },	//			D4 f
-	{ "listP",			LB::b_listP,		1, 1, 400, FBLTIN },	//			D4 f
-	{ "max",			LB::b_max,			-1,0, 400, FBLTIN },	//			D4 f
-	{ "min",			LB::b_min,			-1,0, 400, FBLTIN },	//			D4 f
-	{ "setaProp",		LB::b_setaProp,		3, 3, 400, HBLTIN },	//			D4 h
-	{ "setAt",			LB::b_setAt,		3, 3, 400, HBLTIN },	//			D4 h
-	{ "setProp",		LB::b_setProp,		3, 3, 400, HBLTIN },	//			D4 h
-	{ "sort",			LB::b_sort,			1, 1, 400, HBLTIN },	//			D4 h
+	{ "add",			LB::b_add,			2, 2, 400, HBLTIN_LIST },	//			D4 handler
+	{ "addAt",			LB::b_addAt,		3, 3, 400, HBLTIN_LIST },	//			D4 h
+	{ "addProp",		LB::b_addProp,		3, 3, 400, HBLTIN_LIST },	//			D4 h
+	{ "append",			LB::b_append,		2, 2, 400, HBLTIN_LIST },	//			D4 h
+	{ "count",			LB::b_count,		1, 1, 400, FBLTIN_LIST },	//			D4 f
+	{ "deleteAt",		LB::b_deleteAt,		2, 2, 400, HBLTIN_LIST },	//			D4 h
+	{ "deleteOne",		LB::b_deleteOne,	2, 2, 400, HBLTIN_LIST },	//			D4 h, undocumented?
+	{ "deleteProp",		LB::b_deleteProp,	2, 2, 400, HBLTIN_LIST },	//			D4 h
+	{ "findPos",		LB::b_findPos,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "findPosNear",	LB::b_findPosNear,	2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getaProp",		LB::b_getaProp,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getAt",			LB::b_getAt,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getLast",		LB::b_getLast,		1, 1, 400, FBLTIN_LIST },	//			D4 f
+	{ "getOne",			LB::b_getOne,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getPos",			LB::b_getPos,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getProp",		LB::b_getProp,		2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "getPropAt",		LB::b_getPropAt,	2, 2, 400, FBLTIN_LIST },	//			D4 f
+	{ "list",			LB::b_list,			-1, 0, 400, FBLTIN_LIST },	//			D4 f
+	{ "listP",			LB::b_listP,		1, 1, 400, FBLTIN_LIST },	//			D4 f
+	{ "max",			LB::b_max,			-1,0, 400, FBLTIN_LIST },	//			D4 f
+	{ "min",			LB::b_min,			-1,0, 400, FBLTIN_LIST },	//			D4 f
+	{ "setaProp",		LB::b_setaProp,		3, 3, 400, HBLTIN_LIST },	//			D4 h
+	{ "setAt",			LB::b_setAt,		3, 3, 400, HBLTIN_LIST },	//			D4 h
+	{ "setProp",		LB::b_setProp,		3, 3, 400, HBLTIN_LIST },	//			D4 h
+	{ "sort",			LB::b_sort,			1, 1, 400, HBLTIN_LIST },	//			D4 h
 	// Files
 	{ "closeDA",	 	LB::b_closeDA, 		0, 0, 200, CBLTIN },	// D2 c
 	{ "closeResFile",	LB::b_closeResFile,	0, 1, 200, CBLTIN },	// D2 c
@@ -257,11 +260,15 @@ void Lingo::initBuiltIns(BuiltinProto protos[]) {
 			_builtinCmds[blt->name] = sym;
 			break;
 		case FBLTIN:
+		case FBLTIN_LIST:
 			_builtinFuncs[blt->name] = sym;
+			_builtinListHandlers[blt->name] = sym;
 			break;
 		case HBLTIN:
+		case HBLTIN_LIST:
 			_builtinCmds[blt->name] = sym;
 			_builtinFuncs[blt->name] = sym;
+			_builtinListHandlers[blt->name] = sym;
 			break;
 		case KBLTIN:
 			_builtinConsts[blt->name] = sym;
@@ -314,7 +321,7 @@ void Lingo::printSTUBWithArglist(const char *funcname, int nargs, const char *pr
 
 	s += ")";
 
-	debug(5, "%s %s", prefix, s.c_str());
+	debug(3, "%s %s", prefix, s.c_str());
 }
 
 void Lingo::convertVOIDtoString(int arg, int nargs) {
@@ -519,7 +526,7 @@ void LB::b_offset(int nargs) {
 	Common::String source = g_lingo->pop().asString();
 	Common::String target = g_lingo->pop().asString();
 
-	const char *str = strstr(source.c_str(), target.c_str());
+	const char *str = d_strstr(source.c_str(), target.c_str());
 
 	if (str == nullptr)
 		g_lingo->push(Datum(0));
@@ -794,6 +801,7 @@ void LB::b_getAt(int nargs) {
 
 	switch (list.type) {
 	case ARRAY:
+	case POINT:
 	case RECT:
 		ARRBOUNDSCHECK(index, list);
 		g_lingo->push(list.u.farr->arr[index - 1]);
@@ -803,7 +811,7 @@ void LB::b_getAt(int nargs) {
 		g_lingo->push(list.u.parr->arr[index - 1].v);
 		break;
 	default:
-		TYPECHECK3(list, ARRAY, PARRAY, RECT);
+		TYPECHECK4(list, ARRAY, PARRAY, POINT, RECT);
 	}
 }
 
@@ -1069,26 +1077,57 @@ void LB::b_setProp(int nargs) {
 }
 
 static bool sortArrayHelper(const Datum &lhs, const Datum &rhs) {
-	return lhs.asInt() < rhs.asInt();
+	return lhs.asString() < rhs.asString();
+}
+
+static bool sortNumericArrayHelper(const Datum &lhs, const Datum &rhs) {
+	return lhs.asFloat() < rhs.asFloat();
 }
 
 static bool sortPArrayHelper(const PCell &lhs, const PCell &rhs) {
 	return lhs.p.asString() < rhs.p.asString();
 }
 
+static bool sortNumericPArrayHelper(const PCell &lhs, const PCell &rhs) {
+	return lhs.p.asFloat() < rhs.p.asFloat();
+}
+
 void LB::b_sort(int nargs) {
 	// in D4 manual, p266. linear list is sorted by values
 	// property list is sorted alphabetically by properties
-	// once the list is sorted, it maintains it's sort order even when we add new variables using add command
+	// once the list is sorted, it maintains its sort order even when we add new variables using add command
 	// see b_append to get more details.
 	Datum list = g_lingo->pop();
 
 	if (list.type == ARRAY) {
-		Common::sort(list.u.farr->arr.begin(), list.u.farr->arr.end(), sortArrayHelper);
+		// Check to see if the array is full of numbers
+		bool isNumeric = true;
+		for (const auto &it : list.u.farr->arr) {
+			isNumeric &= it.isNumeric();
+		}
+		if (isNumeric) {
+			// Sorting an array of numbers will use numeric sort order.
+			Common::sort(list.u.farr->arr.begin(), list.u.farr->arr.end(), sortNumericArrayHelper);
+		} else {
+			// Sorting an array of strings will use the string sort order.
+			// Sorting an array of mixed types is undefined behaviour; sometimes the interpreter
+			// will give an answer nearly the same as the string sort order, other times
+			// the interpreter will softlock.
+			Common::sort(list.u.farr->arr.begin(), list.u.farr->arr.end(), sortArrayHelper);
+		}
 		list.u.farr->_sorted = true;
 
 	} else if (list.type == PARRAY) {
-		Common::sort(list.u.parr->arr.begin(), list.u.parr->arr.end(), sortPArrayHelper);
+		// Check to see if the array is full of numbers
+		bool isNumeric = true;
+		for (const auto &it : list.u.parr->arr) {
+			isNumeric &= it.p.isNumeric();
+		}
+		if (isNumeric) {
+			Common::sort(list.u.parr->arr.begin(), list.u.parr->arr.end(), sortNumericPArrayHelper);
+		} else {
+			Common::sort(list.u.parr->arr.begin(), list.u.parr->arr.end(), sortPArrayHelper);
+		}
 		list.u.parr->_sorted = true;
 
 	} else {
@@ -1107,13 +1146,7 @@ void LB::b_closeDA(int nargs) {
 void LB::b_closeResFile(int nargs) {
 	// closeResFile closes only resource files that were opened with openResFile.
 
-	if (nargs == 0) { // Close all open resesource files
-		for (Common::HashMap<Common::String, MacArchive *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo>::iterator
-				it = g_director->_openResFiles.begin(); it != g_director->_openResFiles.end(); ++it) {
-			// also clean up the global resource file hashmap
-			g_director->_allOpenResFiles.erase(it->_key);
-			delete it->_value;
-		}
+	if (nargs == 0) { // Close all open resource files
 		g_director->_openResFiles.clear();
 		return;
 	}
@@ -1122,11 +1155,7 @@ void LB::b_closeResFile(int nargs) {
 	Common::String resFileName = g_director->getCurrentWindow()->getCurrentPath() + d.asString();
 
 	if (g_director->_openResFiles.contains(resFileName)) {
-		auto archive = g_director->_openResFiles.getVal(resFileName);
-		delete archive;
 		g_director->_openResFiles.erase(resFileName);
-		// also clean up the global resource file hashmap
-		g_director->_allOpenResFiles.erase(resFileName);
 	}
 }
 
@@ -1154,34 +1183,35 @@ void LB::b_getNthFileNameInFolder(int nargs) {
 	}
 
 	Datum r;
+	Common::Array<Common::String> fileNameList;
+
+	// First, mix in any files injected from the quirks
+	Common::Archive *cache = SearchMan.getArchive(kQuirksCacheArchive);
+	if (cache) {
+		Common::ArchiveMemberList files;
+
+		cache->listMatchingMembers(files, path + (path.empty() ? "*" : "/*"), true);
+
+		for (auto &fi : files) {
+			fileNameList.push_back(Common::lastPathComponent(fi->getName(), '/'));
+		}
+	}
+
+	// Next, mix in files from the game filesystem (if they exist)
 	if (d.exists()) {
 		Common::FSList f;
 		if (!d.getChildren(f, Common::FSNode::kListAll)) {
 			warning("Cannot access directory %s", path.c_str());
 		} else {
-			if ((uint)fileNum < f.size()) {
-				// here, we sort all the fileNames
-				Common::Array<Common::String> fileNameList;
-				for (uint i = 0; i < f.size(); i++)
-					fileNameList.push_back(f[i].getName());
-
-				// Now mix in any files coming from the quirks
-				Common::Archive *cache = SearchMan.getArchive(kQuirksCacheArchive);
-
-				if (cache) {
-					Common::ArchiveMemberList files;
-
-					cache->listMatchingMembers(files, path + (path.empty() ? "*" : "/*"), true);
-
-					for (auto &fi : files) {
-						fileNameList.push_back(fi->getName().c_str());
-					}
-				}
-
-				Common::sort(fileNameList.begin(), fileNameList.end());
-				r = Datum(fileNameList[fileNum]);
-			}
+			for (uint i = 0; i < f.size(); i++)
+				fileNameList.push_back(f[i].getName());
 		}
+	}
+
+	if (!fileNameList.empty() && (uint)fileNum < fileNameList.size()) {
+		// Sort files alphabetically
+		Common::sort(fileNameList.begin(), fileNameList.end());
+		r = Datum(fileNameList[fileNum]);
 	}
 
 	g_lingo->push(r);
@@ -1212,19 +1242,17 @@ void LB::b_openResFile(int nargs) {
 	Common::String resPath = g_director->getCurrentWindow()->getCurrentPath() + d.asString();
 
 	if (g_director->getPlatform() == Common::kPlatformWindows) {
-		warning("STUB: BUILDBOT: b_openResFile(%s) on Windows", d.asString().c_str());
-		return;
-	}
+ 		warning("STUB: BUILDBOT: b_openResFile(%s) on Windows", d.asString().c_str());
+ 		return;
+ 	}
 
 	if (!g_director->_allOpenResFiles.contains(resPath)) {
-		MacArchive *resFile = new MacArchive();
-
-		if (resFile->openFile(pathMakeRelative(resPath))) {
-			// Track responsibility. closeResFile may only close resource files opened by openResFile.
-			g_director->_openResFiles.setVal(resPath, resFile);
-			g_director->_allOpenResFiles.setVal(resPath, resFile);
+		MacArchive *arch = new MacArchive();
+		if (arch->openFile(pathMakeRelative(resPath))) {
+			g_director->_openResFiles.setVal(resPath, arch);
+			g_director->_allOpenResFiles.setVal(resPath, arch);
 		} else {
-			delete resFile;
+			delete arch;
 		}
 	}
 }
@@ -1236,40 +1264,36 @@ void LB::b_openXlib(int nargs) {
 
 	Datum d = g_lingo->pop();
 	if (g_director->getPlatform() == Common::kPlatformMacintosh) {
-		// try opening the file as a resfile
+		// try opening the file as a Macintosh resource fork
 		Common::String resPath = g_director->getCurrentWindow()->getCurrentPath() + d.asString();
-		if (!g_director->_allOpenResFiles.contains(resPath)) {
-			MacArchive *resFile = new MacArchive();
+		MacArchive *resFile = new MacArchive();
+		if (resFile->openFile(resPath)) {
+			uint32 XCOD = MKTAG('X', 'C', 'O', 'D');
+			uint32 XCMD = MKTAG('X', 'C', 'M', 'D');
+			uint32 XFCN = MKTAG('X', 'F', 'C', 'N');
 
-			if (resFile->openFile(pathMakeRelative(resPath))) {
-				g_director->_allOpenResFiles.setVal(resPath, resFile);
-				uint32 XCOD = MKTAG('X', 'C', 'O', 'D');
-				uint32 XCMD = MKTAG('X', 'C', 'M', 'D');
-				uint32 XFCN = MKTAG('X', 'F', 'C', 'N');
+			Common::Array<uint16> rsrcList = resFile->getResourceIDList(XCOD);
 
-				Common::Array<uint16> rsrcList = resFile->getResourceIDList(XCOD);
-
-				for (uint i = 0; i < rsrcList.size(); i++) {
-					xlibName = resFile->getResourceDetail(XCOD, rsrcList[i]).name.c_str();
-					g_lingo->openXLib(xlibName, kXObj);
-				}
-
-				rsrcList = resFile->getResourceIDList(XCMD);
-				for (uint i = 0; i < rsrcList.size(); i++) {
-					xlibName = resFile->getResourceDetail(XCMD, rsrcList[i]).name.c_str();
-					g_lingo->openXLib(xlibName, kXObj);
-				}
-
-				rsrcList = resFile->getResourceIDList(XFCN);
-				for (uint i = 0; i < rsrcList.size(); i++) {
-					xlibName = resFile->getResourceDetail(XFCN, rsrcList[i]).name.c_str();
-					g_lingo->openXLib(xlibName, kXObj);
-				}
-				return;
-			} else {
-				delete resFile;
+			for (uint i = 0; i < rsrcList.size(); i++) {
+				xlibName = resFile->getResourceDetail(XCOD, rsrcList[i]).name.c_str();
+				g_lingo->openXLib(xlibName, kXObj);
 			}
+
+			rsrcList = resFile->getResourceIDList(XCMD);
+			for (uint i = 0; i < rsrcList.size(); i++) {
+				xlibName = resFile->getResourceDetail(XCMD, rsrcList[i]).name.c_str();
+				g_lingo->openXLib(xlibName, kXObj);
+			}
+
+			rsrcList = resFile->getResourceIDList(XFCN);
+			for (uint i = 0; i < rsrcList.size(); i++) {
+				xlibName = resFile->getResourceDetail(XFCN, rsrcList[i]).name.c_str();
+				g_lingo->openXLib(xlibName, kXObj);
+			}
+			delete resFile;
+			return;
 		}
+		delete resFile;
 	}
 
 	xlibName = getFileName(d.asString());
@@ -1283,9 +1307,8 @@ void LB::b_saveMovie(int nargs) {
 }
 
 void LB::b_setCallBack(int nargs) {
-	for (int i = 0; i < nargs; i++)
-		g_lingo->pop();
-	warning("STUB: b_setCallBack");
+	g_lingo->printSTUBWithArglist("b_setCallBack", nargs);
+	g_lingo->dropStack(nargs);
 }
 
 void LB::b_showResFile(int nargs) {
@@ -1760,6 +1783,8 @@ void LB::b_objectp(int nargs) {
 	Datum res;
 	if (d.type == OBJECT) {
 		res = !d.u.obj->isDisposed();
+	} else if (d.type == ARRAY || d.type == PARRAY) {
+		res = 1;
 	} else {
 		res = 0;
 	}
@@ -2078,7 +2103,8 @@ void LB::b_installMenu(int nargs) {
 	TextCastMember *field = static_cast<TextCastMember *>(member);
 
 	Common::String menuStxt = field->getRawText();
-	int linenum = -1; // We increment it before processing
+	// clang reports linenum variable is unused
+	// int linenum = -1; // We increment it before processing
 
 	Graphics::MacMenu *menu = g_director->_wm->addMenu();
 	int submenu = -1;
@@ -2130,7 +2156,8 @@ void LB::b_installMenu(int nargs) {
 				line += *it++;
 			}
 		}
-		linenum++;
+		// clang reports linenum variable is unused
+		// linenum++;
 
 		if (line.empty())
 			continue;
@@ -2218,7 +2245,7 @@ void LB::b_move(int nargs) {
 
 	if (nargs == 1) {
 		int id = (int) g_director->getCurrentMovie()->getCast()->_castArrayStart;
-		CastMemberID *castId = new CastMemberID(id, 0);
+		CastMemberID *castId = new CastMemberID(id, DEFAULT_CAST_LIB);
 		Datum d = Datum(*castId);
 		delete castId;
 		g_lingo->push(d);
@@ -2244,7 +2271,7 @@ void LB::b_move(int nargs) {
 		return;
 	}
 
-	if (src.u.cast->castLib != 0) {
+	if (src.u.cast->castLib != DEFAULT_CAST_LIB) {
 		warning("b_move: wrong castLib '%d' in src CastMemberID", src.u.cast->castLib);
 	}
 
@@ -2279,7 +2306,7 @@ void LB::b_move(int nargs) {
 
 	for (uint i = 0; i < channels.size(); i++) {
 		if (channels[i]->_sprite->_castId == dest.asMemberID()) {
-			channels[i]->_sprite->setCast(CastMemberID(1, 0));
+			channels[i]->_sprite->setCast(CastMemberID(1, DEFAULT_CAST_LIB));
 			channels[i]->_dirty = true;
 		}
 	}
@@ -2371,7 +2398,8 @@ static const struct PaletteNames {
 
 void LB::b_puppetPalette(int nargs) {
 	g_lingo->convertVOIDtoString(0, nargs);
-	int numFrames = 0, speed = 0, palette = 0;
+	int numFrames = 0, speed = 0;
+	CastMemberID palette(0, 0);
 	Datum d;
 	Movie *movie = g_director->getCurrentMovie();
 
@@ -2391,10 +2419,10 @@ void LB::b_puppetPalette(int nargs) {
 
 			for (int i = 0; i < ARRAYSIZE(paletteNames); i++) {
 				if (palStr.equalsIgnoreCase(paletteNames[i].name))
-					palette = paletteNames[i].type;
+					palette = CastMemberID(paletteNames[i].type, -1);
 			}
 		}
-		if (!palette) {
+		if (palette.isNull()) {
 			CastMember *member = movie->getCastMember(d.asMemberID());
 
 			if (member && member->_type == kCastPalette)
@@ -2407,7 +2435,7 @@ void LB::b_puppetPalette(int nargs) {
 	}
 
 	Score *score = movie->getScore();
-	if (palette) {
+	if (!palette.isNull()) {
 		g_director->setPalette(palette);
 		score->_puppetPalette = true;
 	} else {
@@ -2417,10 +2445,10 @@ void LB::b_puppetPalette(int nargs) {
 
 		// FIXME: set system palette decided by platform, should be fixed after windows palette is working.
 		// try to set mac system palette if lastPalette is 0.
-		if (score->_lastPalette == 0)
-			g_director->setPalette(-1);
+		if (g_director->_lastPalette.isNull())
+			g_director->setPalette(CastMemberID(kClutSystemMac, -1));
 		else
-			g_director->setPalette(score->resolvePaletteId(score->_lastPalette));
+			g_director->setPalette(g_director->_lastPalette);
 	}
 
 	// TODO: Implement advanced features that use these.
@@ -2638,8 +2666,12 @@ void LB::b_spriteBox(int nargs) {
 	if (!channel)
 		return;
 
+	// This automatically sets the sctretch mode
+	channel->_sprite->_stretch = true;
+
 	g_director->getCurrentWindow()->addDirtyRect(channel->getBbox());
 	channel->setBbox(l, t, r, b);
+	channel->_sprite->_cast->setModified(true);
 	channel->_dirty = true;
 }
 
@@ -2689,14 +2721,14 @@ void LB::b_zoomBox(int nargs) {
 	Common::Rect endRect = score->_channels[endSpriteId]->getBbox();
 	if (endRect.isEmpty()) {
 		if ((uint)curFrame + 1 < score->_frames.size()) {
-			Channel endChannel(score->_frames[curFrame + 1]->_sprites[endSpriteId]);
+			Channel endChannel(nullptr, score->_frames[curFrame + 1]->_sprites[endSpriteId]);
 			endRect = endChannel.getBbox();
 		}
 	}
 
 	if (endRect.isEmpty()) {
 		if ((uint)curFrame - 1 > 0) {
-			Channel endChannel(score->_frames[curFrame - 1]->_sprites[endSpriteId]);
+			Channel endChannel(nullptr, score->_frames[curFrame - 1]->_sprites[endSpriteId]);
 			endRect = endChannel.getBbox();
 		}
 	}
@@ -3152,11 +3184,28 @@ void LB::b_window(int nargs) {
 		}
 	}
 
+	// Refer window by-indexing, lingo can request using "window #index" where #index is the index of window that is previously
+	// created, in tutorial workshop `rect of window`, a window is created using 'open(window "ball")' and the same window is
+	// referenced by 'window 1', ie 'put the rect of window 1 into field 9'
+	if (d.type == INT || d.type == FLOAT) {
+		int windowIndex = d.asInt() - 1;
+
+		if (windowIndex >= 0 && windowIndex < (int)windowList->arr.size()) {
+			if (windowList->arr[windowIndex].type == OBJECT && windowList->arr[windowIndex].u.obj->getObjType() == kWindowObj) {
+				Window *window = static_cast<Window *>(windowList->arr[windowIndex].u.obj);
+				g_lingo->push(window);
+				return;
+			}
+		} else {
+			warning("LB::b_window: Window referenced by index %d, out of bounds.", windowIndex);
+		}
+	}
+
 	Graphics::MacWindowManager *wm = g_director->getMacWindowManager();
 	Window *window = new Window(wm->getNextId(), false, false, false, wm, g_director, false);
 	window->setName(windowName);
 	window->setTitle(windowName);
-	window->resize(1, 1, true);
+	window->resizeInner(1, 1);
 	window->setVisible(false, true);
 	wm->addWindowInitialized(window);
 	windowList->arr.push_back(window);

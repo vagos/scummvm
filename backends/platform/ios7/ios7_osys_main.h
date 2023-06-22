@@ -38,10 +38,7 @@
 #define AUDIO_BUFFERS 3
 #define WAVE_BUFFER_SIZE 2048
 #define AUDIO_SAMPLE_RATE 44100
-
-#define SCUMMVM_ROOT_PATH "/var/mobile/Library/ScummVM"
-#define SCUMMVM_SAVE_PATH SCUMMVM_ROOT_PATH "/Savegames"
-#define SCUMMVM_PREFS_PATH SCUMMVM_ROOT_PATH "/Preferences"
+#define MAX_IOS7_SCUMMVM_LOG_FILESIZE_IN_BYTES (100*1024)
 
 typedef void (*SoundProc)(void *param, byte *buf, int len);
 typedef int (*TimerProc)(int interval);
@@ -90,17 +87,12 @@ protected:
 	bool _secondaryTapped;
 	long _lastSecondaryDown;
 	long _lastSecondaryTap;
-	int _gestureStartX, _gestureStartY;
 	bool _mouseClickAndDragEnabled;
 	bool _touchpadModeEnabled;
 	int _lastPadX;
 	int _lastPadY;
 	int _lastDragPosX;
 	int _lastDragPosY;
-
-	int _timerCallbackNext;
-	int _timerCallbackTimer;
-	TimerProc _timerCallback;
 
 	Common::Array<Common::Rect> _dirtyRects;
 	Common::Array<Common::Rect> _dirtyOverlayRects;
@@ -111,9 +103,7 @@ protected:
 
 	Common::String _lastErrorMessage;
 
-#ifdef IPHONE_SANDBOXED
 	Common::String _chrootBasePath;
-#endif
 
 public:
 
@@ -217,8 +207,13 @@ public:
 	Common::String getSystemLanguage() const override;
 
 	bool isConnectionLimited() override;
+	void virtualController(bool connect);
 
-	virtual Common::String getDefaultLogFileName() { return Common::String("/var/mobile/.scummvm.log"); }
+	virtual Common::String getDefaultLogFileName() override { return Common::String("/scummvm.log"); }
+
+	virtual GUI::OptionsContainerWidget* buildBackendOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &target) const override;
+	virtual void applyBackendSettings() override;
+	virtual void registerDefaultSettings(const Common::String &target) const override;
 
 protected:
 	void initVideoContext();
@@ -248,16 +243,23 @@ protected:
 	void handleEvent_applicationRestoreState();
 	void handleEvent_applicationClearState();
 
-	bool handleEvent_mouseDown(Common::Event &event, int x, int y);
-	bool handleEvent_mouseUp(Common::Event &event, int x, int y);
+	bool handleEvent_touchFirstDown(Common::Event &event, int x, int y);
+	bool handleEvent_touchFirstUp(Common::Event &event, int x, int y);
 
-	bool handleEvent_secondMouseDown(Common::Event &event, int x, int y);
-	bool handleEvent_secondMouseUp(Common::Event &event, int x, int y);
+	bool handleEvent_touchSecondDown(Common::Event &event, int x, int y);
+	bool handleEvent_touchSecondUp(Common::Event &event, int x, int y);
 
-	bool handleEvent_mouseDragged(Common::Event &event, int x, int y);
-	bool handleEvent_mouseSecondDragged(Common::Event &event, int x, int y);
+	bool handleEvent_touchFirstDragged(Common::Event &event, int x, int y);
+	bool handleEvent_touchSecondDragged(Common::Event &event, int x, int y);
+
+	void handleEvent_mouseLeftButtonDown(Common::Event &event, int x, int y);
+	void handleEvent_mouseLeftButtonUp(Common::Event &event, int x, int y);
+	void handleEvent_mouseRightButtonDown(Common::Event &event, int x, int y);
+	void handleEvent_mouseRightButtonUp(Common::Event &event, int x, int y);
+	void handleEvent_mouseDelta(Common::Event &event, int deltaX, int deltaY);
 
 	void rebuildSurface();
+	float getMouseSpeed();
 };
 
 #endif

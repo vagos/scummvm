@@ -60,7 +60,6 @@
 #include "ags/engine/main/update.h"
 #include "ags/shared/ac/sprite_cache.h"
 #include "ags/shared/util/string_compat.h"
-#include "ags/lib/std/math.h"
 #include "ags/engine/gfx/graphics_driver.h"
 #include "ags/engine/script/runtime_script_value.h"
 #include "ags/engine/ac/dynobj/cc_character.h"
@@ -155,21 +154,8 @@ void Character_AddWaypoint(CharacterInfo *chaa, int x, int y) {
 
 void Character_AnimateEx(CharacterInfo *chaa, int loop, int delay, int repeat,
 	int blocking, int direction, int sframe, int volume = 100) {
-	if (direction == FORWARDS)
-		direction = 0;
-	else if (direction == BACKWARDS)
-		direction = 1;
-	if (blocking == BLOCKING)
-		blocking = 1;
-	else if (blocking == IN_BACKGROUND)
-		blocking = 0;
 
-	if ((repeat < 0) || (repeat > 1))
-		quit("!Character.Animate: invalid repeat value");
-	if ((blocking < 0) || (blocking > 1))
-		quit("!Character.Animate: invalid blocking value");
-	if ((direction < 0) || (direction > 1))
-		quit("!Character.Animate: invalid direction");
+	ValidateViewAnimParams("Character.Animate", repeat, blocking, direction);
 
 	animate_character(chaa, loop, delay, repeat, 0, direction, sframe, volume);
 
@@ -178,7 +164,7 @@ void Character_AnimateEx(CharacterInfo *chaa, int loop, int delay, int repeat,
 }
 
 void Character_Animate(CharacterInfo *chaa, int loop, int delay, int repeat, int blocking, int direction) {
-	Character_AnimateEx(chaa, loop, delay, repeat, blocking, direction, 0, -1);
+	Character_AnimateEx(chaa, loop, delay, repeat, blocking, direction, 0, 100 /* full volume */);
 }
 
 void Character_ChangeRoomAutoPosition(CharacterInfo *chaa, int room, int newPos) {
@@ -1716,6 +1702,7 @@ void start_character_turning(CharacterInfo *chinf, int useloop, int no_diagonal)
 		no_diagonal = 0;
 
 	for (ii = fromidx; ii != toidx; ii -= go_anticlock) {
+		// Wrap the loop order into range [0-7]
 		if (ii < 0)
 			ii = 7;
 		if (ii >= 8)
@@ -1723,11 +1710,12 @@ void start_character_turning(CharacterInfo *chinf, int useloop, int no_diagonal)
 		if (ii == toidx)
 			break;
 		if ((turnlooporder[ii] >= 4) && (no_diagonal > 0))
-			continue;
+			continue; // there are no diagonal loops
+		if (turnlooporder[ii] >= _GP(views)[chinf->view].numLoops)
+			continue; // no such loop
 		if (_GP(views)[chinf->view].loops[turnlooporder[ii]].numFrames < 1)
-			continue;
-		if (turnlooporder[ii] < _GP(views)[chinf->view].numLoops)
-			chinf->walking += TURNING_AROUND;
+			continue; // no frames in such loop
+		chinf->walking += TURNING_AROUND;
 	}
 
 }

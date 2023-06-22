@@ -68,7 +68,7 @@ struct SaveInfoSection {
 
 #define SaveInfoSectionSize (4+4+4 + 4+4 + 4+2)
 
-#define CURRENT_VER 108
+#define CURRENT_VER 109
 #define INFOSECTION_VERSION 2
 
 #pragma mark -
@@ -1438,6 +1438,21 @@ void ScummEngine::saveLoadWithSerializer(Common::Serializer &s) {
 	s.syncAsSint16LE(_cursor.height, VER(20));
 	s.syncAsSint16LE(_cursor.hotspotX, VER(20));
 	s.syncAsSint16LE(_cursor.hotspotY, VER(20));
+
+	// Post-load fix for broken SAMNMAX savegames which contain invalid
+	// cursor values; the value we're setting here should not count since
+	// it's being replaced by the post-load script, as long as it's not zero.
+	// The same also happens for the Mac version of INDY3: the cursor was being
+	// handled directly with a CursorMan.replaceCursor() without specifying any
+	// values for the _cursor object (#14498). Let's fix that with the proper values.
+	if ((_game.version == 6 || (_game.id == GID_INDY3 && _macScreen)) &&
+		(_cursor.width == 0 || _cursor.height == 0)) {
+		_cursor.width = 15;
+		_cursor.height = 15;
+		_cursor.hotspotX = 7;
+		_cursor.hotspotY = 7;
+	}
+
 	s.syncAsByte(_cursor.animate, VER(20));
 	s.syncAsByte(_cursor.animateIndex, VER(20));
 
@@ -1795,6 +1810,23 @@ void ScummEngine::saveLoadWithSerializer(Common::Serializer &s) {
 		}
 	}
 
+	// Before version 109, palette cycling for v4 games was handled in a different
+	// way (which is, by retrofitting v5 code, which caused a class of bugs like #10854).
+	// The proper v4 code has now been implemented from disasm (specifically, only the
+	// LOOM CD and MI1 VGA executables have said code).
+	//
+	// Given that the previous implementation mangled the cycling data during the init
+	// phase, we have to resort to the following post-load fix, otherwise the color
+	// cycling will not occur on game load.
+	if (_game.version == 4 && (_game.id == GID_LOOM || _game.id == GID_MONKEY_VGA) &&
+		s.getVersion() < VER(109)) {
+		byte *roomptr = getResourceAddress(rtRoom, _roomResource);
+		const byte *ptr = findResourceData(MKTAG('C', 'Y', 'C', 'L'), roomptr);
+		if (ptr) {
+			initCycl(ptr);
+		}
+	}
+
 	//
 	// Save/load more global object state
 	//
@@ -1847,8 +1879,11 @@ void ScummEngine::saveLoadWithSerializer(Common::Serializer &s) {
 			for (int v = 102 + 6; v <= 111; v++)
 				VAR(v) = 0;
 
-		// make sure the appropriate verbs and arrows are displayed
-		runInventoryScript(0);
+		// Make sure the appropriate verbs and arrows are displayed.
+		// We avoid doing that in room 50 (save room) since it can crash
+		// the game and trigger several unwanted side effects (bug #14387).
+		if (_currentRoom != 50)
+			runInventoryScript(0);
 	}
 
 	//

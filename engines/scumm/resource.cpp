@@ -241,7 +241,6 @@ void ScummEngine::askForDisk(const char *filename, int disknum) {
 
 void ScummEngine::readIndexFile() {
 	uint32 blocktype, itemsize;
-	int numblock = 0;
 
 	debugC(DEBUG_GENERAL, "readIndexFile()");
 
@@ -302,7 +301,6 @@ void ScummEngine::readIndexFile() {
 		if (_fileHandle->eos() || _fileHandle->err())
 			break;
 
-		numblock++;
 		debug(2, "Reading index block of type '%s', size %d", tag2str(blocktype), itemsize);
 		readIndexBlock(blocktype, itemsize);
 	}
@@ -708,7 +706,7 @@ int ScummEngine::loadResource(ResType type, ResId idx) {
 			        "while trying to load res (%s,%d) in room %d at %d+%d in file %s",
 			        tag2str(tag), tag2str(_res->_types[type]._tag),
 					nameOfResType(type), idx, roomNr,
-					_fileOffset, fileOffs, _fileHandle->getName());
+			                _fileOffset, fileOffs, _fileHandle->getDebugName().c_str());
 		}
 
 		size = _fileHandle->readUint32BE();

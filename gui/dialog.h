@@ -66,6 +66,7 @@ protected:
 
 private:
 	int		_result;
+	bool    _handlingMouseWheel;
 
 public:
 	Dialog(int x, int y, int w, int h, bool scale = false);
@@ -80,6 +81,8 @@ public:
 	void	releaseFocus() override;
 	void	setFocusWidget(Widget *widget);
 	Widget *getFocusWidget() { return _focusedWidget; }
+
+	bool isDragging() const { return _dragWidget != nullptr; }
 
 	void setTickleWidget(Widget *widget) { _tickleWidget = widget; }
 	void unSetTickleWidget() { _tickleWidget = nullptr; }

@@ -39,13 +39,17 @@ struct BSUM {
 	uint16 startTimeMinutes;
 
 	// UI
-	Common::Rect mapButtonHotspot;
+	Common::Rect extraButtonHotspot;	// Extra button is map in tvd, clock in nancy2 and up
+	Common::Rect extraButtonHighlightDest;
 	Common::Rect textboxScreenPosition;
 	Common::Rect inventoryBoxScreenPosition;
 	Common::Rect menuButtonSrc;
 	Common::Rect helpButtonSrc;
 	Common::Rect menuButtonDest;
 	Common::Rect helpButtonDest;
+	Common::Rect menuButtonHighlightSrc;
+	Common::Rect helpButtonHighlightSrc;
+	Common::Rect clockHighlightSrc;
 
 	uint16 horizontalEdgesSize;
 	uint16 verticalEdgesSize;
@@ -69,6 +73,12 @@ struct INV {
 		Common::String name;
 		byte keepItem;
 		Common::Rect sourceRect;
+		Common::Rect highlightedSourceRect;
+
+		Common::String specificCantText;
+		Common::String generalCantText;
+		SoundDescription specificCantSound;
+		SoundDescription generalCantSound;
 	};
 
 	INV(Common::SeekableReadStream *chunkStream);
@@ -86,6 +96,9 @@ struct INV {
 
 	Common::String inventoryBoxIconsImageName;
 	Common::String inventoryCursorsImageName;
+
+	SoundDescription cantSound;
+	Common::String cantText;
 
 	Common::Array<ItemDescription> itemDescriptions;
 };
@@ -106,7 +119,9 @@ struct TBOX {
 	Common::Array<Common::Rect> ornamentSrcs;
 	Common::Array<Common::Rect> ornamentDests;
 
-	uint16 fontID;
+	uint16 defaultFontID;
+	uint16 conversationFontID;
+	uint16 highlightConversationFontID;
 };
 
 struct MAP {
@@ -146,8 +161,9 @@ struct HELP {
 	HELP(Common::SeekableReadStream *chunkStream);
 
 	Common::String imageName;
-	Common::Rect buttonSrc;
 	Common::Rect buttonDest;
+	Common::Rect buttonSrc;
+	Common::Rect buttonHoverSrc;
 };
 
 struct CRED {
@@ -177,6 +193,7 @@ struct CLOK {
 	CLOK(Common::SeekableReadStream *chunkStream);
 
 	Common::Array<Common::Rect> animSrcs;
+	Common::Array<Common::Rect> animDests;
 
 	Common::Array<Common::Rect> hoursHandSrcs;
 	Common::Array<Common::Rect> minutesHandSrcs;
@@ -184,11 +201,19 @@ struct CLOK {
 	Common::Array<Common::Rect> hoursHandDests;
 	Common::Array<Common::Rect> minutesHandDests;
 
-	Common::Rect gargoyleEyesSrc;
-	Common::Rect gargoyleEyesDest;
+	Common::Rect staticImageSrc;
+	Common::Rect staticImageDest;
 
 	uint32 timeToKeepOpen;
 	uint16 frameTime;
+};
+
+struct SPEC {
+	SPEC(Common::SeekableReadStream *chunkStream);
+
+	byte fadeToBlackNumFrames;
+	uint16 fadeToBlackFrameTime;
+	byte crossDissolveNumFrames;
 };
 
 struct ImageChunk {

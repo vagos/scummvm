@@ -26,12 +26,17 @@
 
 
 enum InputEvent {
-	kInputMouseDown,
-	kInputMouseUp,
-	kInputMouseDragged,
-	kInputMouseSecondDragged,
-	kInputMouseSecondDown,
-	kInputMouseSecondUp,
+	kInputTouchFirstDown,
+	kInputTouchFirstUp,
+	kInputTouchFirstDragged,
+	kInputTouchSecondDragged,
+	kInputTouchSecondDown,
+	kInputTouchSecondUp,
+	kInputMouseLeftButtonDown,
+	kInputMouseLeftButtonUp,
+	kInputMouseRightButtonDown,
+	kInputMouseRightButtonUp,
+	kInputMouseDelta,
 	kInputOrientationChanged,
 	kInputKeyPressed,
 	kInputApplicationSuspended,
@@ -117,7 +122,8 @@ bool iOS7_isBigDevice();
 
 void iOS7_buildSharedOSystemInstance();
 void iOS7_main(int argc, char **argv);
-const char *iOS7_getDocumentsDir();
+Common::String iOS7_getDocumentsDir();
+Common::String iOS7_getAppBundleDir();
 bool iOS7_touchpadModeEnabled();
 
 uint getSizeNextPOT(uint size);

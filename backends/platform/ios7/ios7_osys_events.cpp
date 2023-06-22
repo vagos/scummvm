@@ -24,6 +24,7 @@
 
 #include "gui/message.h"
 #include "common/translation.h"
+#include "common/config-manager.h"
 
 #include "backends/platform/ios7/ios7_osys_main.h"
 
@@ -33,11 +34,6 @@ bool OSystem_iOS7::pollEvent(Common::Event &event) {
 	//printf("pollEvent()\n");
 
 	long curTime = getMillis();
-
-	if (_timerCallback && (curTime >= _timerCallbackNext)) {
-		_timerCallback(_timerCallbackTimer);
-		_timerCallbackNext = curTime + _timerCallbackTimer;
-	}
 
 	if (_queuedInputEvent.type != Common::EVENT_INVALID && curTime >= _queuedEventTime) {
 		event = _queuedInputEvent;
@@ -49,19 +45,39 @@ bool OSystem_iOS7::pollEvent(Common::Event &event) {
 
 	if (iOS7_fetchEvent(&internalEvent)) {
 		switch (internalEvent.type) {
-		case kInputMouseDown:
-			if (!handleEvent_mouseDown(event, internalEvent.value1, internalEvent.value2))
+		case kInputTouchFirstDown:
+			if (!handleEvent_touchFirstDown(event, internalEvent.value1, internalEvent.value2))
 				return false;
 			break;
 
-		case kInputMouseUp:
-			if (!handleEvent_mouseUp(event, internalEvent.value1, internalEvent.value2))
+		case kInputTouchFirstUp:
+			if (!handleEvent_touchFirstUp(event, internalEvent.value1, internalEvent.value2))
 				return false;
 			break;
 
-		case kInputMouseDragged:
-			if (!handleEvent_mouseDragged(event, internalEvent.value1, internalEvent.value2))
+		case kInputTouchFirstDragged:
+			if (!handleEvent_touchFirstDragged(event, internalEvent.value1, internalEvent.value2))
 				return false;
+			break;
+
+		case kInputMouseLeftButtonDown:
+			handleEvent_mouseLeftButtonDown(event, internalEvent.value1, internalEvent.value2);
+			break;
+
+		case kInputMouseLeftButtonUp:
+			handleEvent_mouseLeftButtonUp(event, internalEvent.value1, internalEvent.value2);
+			break;
+
+		case kInputMouseRightButtonDown:
+			handleEvent_mouseRightButtonDown(event, internalEvent.value1, internalEvent.value2);
+			break;
+
+		case kInputMouseRightButtonUp:
+			handleEvent_mouseRightButtonUp(event, internalEvent.value1, internalEvent.value2);
+			break;
+
+		case kInputMouseDelta:
+			handleEvent_mouseDelta(event, internalEvent.value1, internalEvent.value2);
 			break;
 
 		case kInputOrientationChanged:
@@ -88,18 +104,18 @@ bool OSystem_iOS7::pollEvent(Common::Event &event) {
 			handleEvent_applicationClearState();
 			return false;
 
-		case kInputMouseSecondDragged:
-			if (!handleEvent_mouseSecondDragged(event, internalEvent.value1, internalEvent.value2))
+		case kInputTouchSecondDragged:
+			if (!handleEvent_touchSecondDragged(event, internalEvent.value1, internalEvent.value2))
 				return false;
 			break;
-		case kInputMouseSecondDown:
+		case kInputTouchSecondDown:
 			_secondaryTapped = true;
-			if (!handleEvent_secondMouseDown(event, internalEvent.value1, internalEvent.value2))
+			if (!handleEvent_touchSecondDown(event, internalEvent.value1, internalEvent.value2))
 				return false;
 			break;
-		case kInputMouseSecondUp:
+		case kInputTouchSecondUp:
 			_secondaryTapped = false;
-			if (!handleEvent_secondMouseUp(event, internalEvent.value1, internalEvent.value2))
+			if (!handleEvent_touchSecondUp(event, internalEvent.value1, internalEvent.value2))
 				return false;
 			break;
 
@@ -154,18 +170,19 @@ bool OSystem_iOS7::pollEvent(Common::Event &event) {
 	return false;
 }
 
-bool OSystem_iOS7::handleEvent_mouseDown(Common::Event &event, int x, int y) {
+bool OSystem_iOS7::handleEvent_touchFirstDown(Common::Event &event, int x, int y) {
 	//printf("Mouse down at (%u, %u)\n", x, y);
 
 	// Workaround: kInputMouseSecondToggled isn't always sent when the
 	// secondary finger is lifted. Need to make sure we get out of that mode.
 	_secondaryTapped = false;
 
-	if (_touchpadModeEnabled) {
-		_lastPadX = x;
-		_lastPadY = y;
-	} else
+	_lastPadX = x;
+	_lastPadY = y;
+
+	if (!_touchpadModeEnabled) {
 		warpMouse(x, y);
+	}
 
 	if (_mouseClickAndDragEnabled) {
 		event.type = Common::EVENT_LBUTTONDOWN;
@@ -178,12 +195,12 @@ bool OSystem_iOS7::handleEvent_mouseDown(Common::Event &event, int x, int y) {
 	return false;
 }
 
-bool OSystem_iOS7::handleEvent_mouseUp(Common::Event &event, int x, int y) {
+bool OSystem_iOS7::handleEvent_touchFirstUp(Common::Event &event, int x, int y) {
 	//printf("Mouse up at (%u, %u)\n", x, y);
 
 	if (_secondaryTapped) {
 		_secondaryTapped = false;
-		if (!handleEvent_secondMouseUp(event, x, y))
+		if (!handleEvent_touchSecondUp(event, x, y))
 			return false;
 	} else if (_mouseClickAndDragEnabled) {
 		event.type = Common::EVENT_LBUTTONUP;
@@ -207,10 +224,8 @@ bool OSystem_iOS7::handleEvent_mouseUp(Common::Event &event, int x, int y) {
 	return true;
 }
 
-bool OSystem_iOS7::handleEvent_secondMouseDown(Common::Event &event, int x, int y) {
+bool OSystem_iOS7::handleEvent_touchSecondDown(Common::Event &event, int x, int y) {
 	_lastSecondaryDown = getMillis();
-	_gestureStartX = x;
-	_gestureStartY = y;
 
 	if (_mouseClickAndDragEnabled) {
 		event.type = Common::EVENT_LBUTTONUP;
@@ -226,7 +241,7 @@ bool OSystem_iOS7::handleEvent_secondMouseDown(Common::Event &event, int x, int 
 	return true;
 }
 
-bool OSystem_iOS7::handleEvent_secondMouseUp(Common::Event &event, int x, int y) {
+bool OSystem_iOS7::handleEvent_touchSecondUp(Common::Event &event, int x, int y) {
 	int curTime = getMillis();
 
 	if (curTime - _lastSecondaryDown < 400) {
@@ -265,7 +280,7 @@ bool OSystem_iOS7::handleEvent_secondMouseUp(Common::Event &event, int x, int y)
 	return true;
 }
 
-bool OSystem_iOS7::handleEvent_mouseDragged(Common::Event &event, int x, int y) {
+bool OSystem_iOS7::handleEvent_touchFirstDragged(Common::Event &event, int x, int y) {
 	if (_lastDragPosX == x && _lastDragPosY == y)
 		return false;
 
@@ -273,107 +288,78 @@ bool OSystem_iOS7::handleEvent_mouseDragged(Common::Event &event, int x, int y) 
 	_lastDragPosY = y;
 
 	//printf("Mouse dragged at (%u, %u)\n", x, y);
-	int mouseNewPosX;
-	int mouseNewPosY;
+	int deltaX = _lastPadX - x;
+	int deltaY = _lastPadY - y;
+	_lastPadX = x;
+	_lastPadY = y;
+
 	if (_touchpadModeEnabled) {
-		int deltaX = _lastPadX - x;
-		int deltaY = _lastPadY - y;
-		_lastPadX = x;
-		_lastPadY = y;
-
-		mouseNewPosX = (int)(_videoContext->mouseX - deltaX / 0.5f);
-		mouseNewPosY = (int)(_videoContext->mouseY - deltaY / 0.5f);
-
-		int widthCap = _videoContext->overlayInGUI ? _videoContext->overlayWidth : _videoContext->screenWidth;
-		int heightCap = _videoContext->overlayInGUI ? _videoContext->overlayHeight : _videoContext->screenHeight;
-
-		if (mouseNewPosX < 0)
-			mouseNewPosX = 0;
-		else if (mouseNewPosX > widthCap)
-			mouseNewPosX = widthCap;
-
-		if (mouseNewPosY < 0)
-			mouseNewPosY = 0;
-		else if (mouseNewPosY > heightCap)
-			mouseNewPosY = heightCap;
-
+		handleEvent_mouseDelta(event, deltaX, deltaY);
 	} else {
-		mouseNewPosX = x;
-		mouseNewPosY = y;
+		event.type = Common::EVENT_MOUSEMOVE;
+		event.relMouse.x = deltaX;
+		event.relMouse.y = deltaY;
+		event.mouse.x = x;
+		event.mouse.y = y;
+		warpMouse(x, y);
+
 	}
-
-	event.type = Common::EVENT_MOUSEMOVE;
-	event.mouse.x = mouseNewPosX;
-	event.mouse.y = mouseNewPosY;
-	warpMouse(mouseNewPosX, mouseNewPosY);
-
 	return true;
 }
 
-bool OSystem_iOS7::handleEvent_mouseSecondDragged(Common::Event &event, int x, int y) {
-	if (_gestureStartX == -1 || _gestureStartY == -1) {
-		return false;
-	}
-
-	static const int kNeededLength = 100;
-	static const int kMaxDeviation = 20;
-
-	int vecX = (x - _gestureStartX);
-	int vecY = (y - _gestureStartY);
-
-	int absX = abs(vecX);
-	int absY = abs(vecY);
-
-	//printf("(%d, %d)\n", vecX, vecY);
-
-	if (absX >= kNeededLength || absY >= kNeededLength) { // Long enough gesture to react upon.
-		_gestureStartX = -1;
-		_gestureStartY = -1;
-
-		if (absX < kMaxDeviation && vecY >= kNeededLength) {
-			// Swipe down
-			event.type = Common::EVENT_MAINMENU;
-			_queuedInputEvent.type = Common::EVENT_INVALID;
-
-			_queuedEventTime = getMillis() + kQueuedInputEventDelay;
-			return true;
-		}
-
-		if (absX < kMaxDeviation && -vecY >= kNeededLength) {
-			// Swipe up
-			_mouseClickAndDragEnabled = !_mouseClickAndDragEnabled;
-			Common::U32String dialogMsg;
-			if (_mouseClickAndDragEnabled) {
-				_touchpadModeEnabled = false;
-				dialogMsg = _("Mouse-click-and-drag mode enabled.");
-			} else
-				dialogMsg = _("Mouse-click-and-drag mode disabled.");
-			GUI::TimedMessageDialog dialog(dialogMsg, 1500);
-			dialog.runModal();
-			return false;
-		}
-
-		if (absY < kMaxDeviation && vecX >= kNeededLength) {
-			// Swipe right
-			_touchpadModeEnabled = !_touchpadModeEnabled;
-			Common::U32String dialogMsg;
-			if (_touchpadModeEnabled)
-				dialogMsg = _("Touchpad mode enabled.");
-			else
-				dialogMsg = _("Touchpad mode disabled.");
-			GUI::TimedMessageDialog dialog(dialogMsg, 1500);
-			dialog.runModal();
-			return false;
-
-		}
-
-		if (absY < kMaxDeviation && -vecX >= kNeededLength) {
-			// Swipe left
-			return false;
-		}
-	}
-
+bool OSystem_iOS7::handleEvent_touchSecondDragged(Common::Event &event, int x, int y) {
 	return false;
+}
+
+void OSystem_iOS7::handleEvent_mouseLeftButtonDown(Common::Event &event, int x, int y) {
+	event.type = Common::EVENT_LBUTTONDOWN;
+	event.mouse.x = _videoContext->mouseX;
+	event.mouse.y = _videoContext->mouseY;
+}
+
+void OSystem_iOS7::handleEvent_mouseLeftButtonUp(Common::Event &event, int x, int y) {
+	event.type = Common::EVENT_LBUTTONUP;
+	event.mouse.x = _videoContext->mouseX;
+	event.mouse.y = _videoContext->mouseY;
+}
+
+void OSystem_iOS7::handleEvent_mouseRightButtonDown(Common::Event &event, int x, int y) {
+	event.type = Common::EVENT_RBUTTONDOWN;
+	event.mouse.x = _videoContext->mouseX;
+	event.mouse.y = _videoContext->mouseY;
+}
+
+void OSystem_iOS7::handleEvent_mouseRightButtonUp(Common::Event &event, int x, int y) {
+	event.type = Common::EVENT_RBUTTONUP;
+	event.mouse.x = _videoContext->mouseX;
+	event.mouse.y = _videoContext->mouseY;
+}
+
+void OSystem_iOS7::handleEvent_mouseDelta(Common::Event &event, int deltaX, int deltaY) {
+	int mouseNewPosX = (int)(_videoContext->mouseX - (int)((float)deltaX * getMouseSpeed()));
+	int mouseNewPosY = (int)(_videoContext->mouseY - (int)((float)deltaY * getMouseSpeed()));
+
+	int widthCap = _videoContext->overlayInGUI ? _videoContext->overlayWidth : _videoContext->screenWidth;
+	int heightCap = _videoContext->overlayInGUI ? _videoContext->overlayHeight : _videoContext->screenHeight;
+
+	// Make sure the mouse position is valid
+	if (mouseNewPosX < 0)
+		mouseNewPosX = 0;
+	else if (mouseNewPosX > widthCap)
+		mouseNewPosX = widthCap;
+	if (mouseNewPosY < 0)
+		mouseNewPosY = 0;
+	else if (mouseNewPosY > heightCap)
+		mouseNewPosY = heightCap;
+
+	event.type = Common::EVENT_MOUSEMOVE;
+	event.relMouse.x = deltaX;
+	event.relMouse.y = deltaY;
+	event.mouse.x = mouseNewPosX;
+	event.mouse.y = mouseNewPosY;
+
+	// Move the mouse on screen
+	warpMouse(mouseNewPosX, mouseNewPosY);
 }
 
 void  OSystem_iOS7::handleEvent_orientationChanged(int orientation) {
@@ -473,9 +459,10 @@ bool OSystem_iOS7::handleEvent_swipe(Common::Event &event, int direction, int to
 		switch ((UIViewSwipeDirection)direction) {
 		case kUIViewSwipeUp: {
 			_mouseClickAndDragEnabled = !_mouseClickAndDragEnabled;
+			ConfMan.setBool("clickanddrag_mode", _mouseClickAndDragEnabled);
+			ConfMan.flushToDisk();
 			Common::U32String dialogMsg;
 			if (_mouseClickAndDragEnabled) {
-				_touchpadModeEnabled = false;
 				dialogMsg = _("Mouse-click-and-drag mode enabled.");
 			} else
 				dialogMsg = _("Mouse-click-and-drag mode disabled.");
@@ -495,6 +482,8 @@ bool OSystem_iOS7::handleEvent_swipe(Common::Event &event, int direction, int to
 		case kUIViewSwipeRight: {
 			// Swipe right
 			_touchpadModeEnabled = !_touchpadModeEnabled;
+			ConfMan.setBool("touchpad_mode", _touchpadModeEnabled);
+			ConfMan.flushToDisk();
 			Common::U32String dialogMsg;
 			if (_touchpadModeEnabled)
 				dialogMsg = _("Touchpad mode enabled.");
@@ -502,6 +491,15 @@ bool OSystem_iOS7::handleEvent_swipe(Common::Event &event, int direction, int to
 				dialogMsg = _("Touchpad mode disabled.");
 			GUI::TimedMessageDialog dialog(dialogMsg, 1500);
 			dialog.runModal();
+			return false;
+		}
+
+		case kUIViewSwipeLeft: {
+			// Swipe left
+			bool connect = !ConfMan.getBool("onscreen_control");
+			ConfMan.setBool("onscreen_control", connect);
+			ConfMan.flushToDisk();
+			virtualController(connect);
 			return false;
 		}
 

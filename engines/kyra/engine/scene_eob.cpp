@@ -125,6 +125,11 @@ void EoBCoreEngine::readLevelFileData(int level) {
 	if (!s)
 		error("Failed to load level file LEVEL%d.INF/DRO/ELO/JOT", level);
 
+	if (_flags.gameID == GI_EOB2 && _flags.lang == Common::Language::ZH_TWN) {
+		_screen->loadChineseEOB2LZBitmap(s, 5, 15000);
+		return;
+	}
+
 	if (s->readUint16LE() + 2 == s->size()) {
 		// check for valid compression type
 		if (s->readUint16LE() <= 4) {
@@ -378,9 +383,13 @@ void EoBCoreEngine::loadBlockProperties(const char *mazFile) {
 }
 
 const uint8 *EoBCoreEngine::getBlockFileData(int) {
-	Common::SeekableReadStream *s = _res->createReadStream(_curBlockFile);
-	_screen->loadFileDataToPage(s, 15, s->size());
-	delete s;
+	if (_flags.gameID == GI_EOB2 && _flags.platform == Common::kPlatformPC98) {
+		_screen->loadBitmap(_curBlockFile.c_str(), 15, 15, 0);
+	} else {
+		Common::SeekableReadStream *s = _res->createReadStream(_curBlockFile);
+		_screen->loadFileDataToPage(s, 15, s->size());
+		delete s;
+	}
 	return _screen->getCPagePtr(15);
 }
 

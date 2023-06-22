@@ -89,18 +89,21 @@ Token::Type FCLInstruction::getType() {
 	return _type;
 }
 
-void FreescapeEngine::executeObjectConditions(GeometricObject *obj, bool shot, bool collided) {
+void FreescapeEngine::executeObjectConditions(GeometricObject *obj, bool shot, bool collided, bool activated) {
 	assert(obj != nullptr);
 	if (!obj->_conditionSource.empty()) {
 		_firstSound = true;
-		_objExecutingCodeSize = obj->getSize();
+		_syncSound = false;
+		_objExecutingCodeSize = collided ? obj->getSize() : Math::Vector3d();
 		if (collided)
 			debugC(1, kFreescapeDebugCode, "Executing with collision flag: %s", obj->_conditionSource.c_str());
 		else if (shot)
 			debugC(1, kFreescapeDebugCode, "Executing with shot flag: %s", obj->_conditionSource.c_str());
+		else if (activated)
+			debugC(1, kFreescapeDebugCode, "Executing with activated flag: %s", obj->_conditionSource.c_str());
 		else
 			error("Neither shot or collided flag is set!");
-		executeCode(obj->_condition, shot, collided, false); // TODO: check this last parameter
+		executeCode(obj->_condition, shot, collided, false, activated); // TODO: check this last parameter
 	}
 }
 
@@ -113,50 +116,64 @@ void FreescapeEngine::executeLocalGlobalConditions(bool shot, bool collided, boo
 
 	for (uint i = 0; i < conditions.size(); i++) {
 		debugC(1, kFreescapeDebugCode, "%s", conditionSources[i].c_str());
-		executeCode(conditions[i], shot, collided, timer);
+		executeCode(conditions[i], shot, collided, timer, false);
 	}
 
 	debugC(1, kFreescapeDebugCode, "Executing global conditions (%d)", _conditions.size());
 	for (uint i = 0; i < _conditions.size(); i++) {
 		debugC(1, kFreescapeDebugCode, "%s", _conditionSources[i].c_str());
-		executeCode(_conditions[i], shot, collided, timer);
+		executeCode(_conditions[i], shot, collided, timer, false);
 	}
 }
 
-void FreescapeEngine::executeCode(FCLInstructionVector &code, bool shot, bool collided, bool timer) {
+void FreescapeEngine::executeCode(FCLInstructionVector &code, bool shot, bool collided, bool timer, bool activated) {
 	assert(!(shot && collided));
 	int ip = 0;
+	bool skip = false;
 	int codeSize = code.size();
+	assert(codeSize > 0);
 	while (ip <= codeSize - 1) {
 		FCLInstruction &instruction = code[ip];
 		debugC(1, kFreescapeDebugCode, "Executing ip: %d with type %d in code with size: %d", ip, instruction.getType(), codeSize);
+
+		if (skip && instruction.getType() != Token::ELSE && instruction.getType() != Token::ENDIF) {
+			debugC(1, kFreescapeDebugCode, "Instruction skipped!");
+			ip++;
+			continue;
+		}
+
 		switch (instruction.getType()) {
 		default:
-			if (!isCastle())
-				error("Instruction %x at ip: %d not implemented!", instruction.getType(), ip);
+			//if (!isCastle())
+			error("Instruction %x at ip: %d not implemented!", instruction.getType(), ip);
 			break;
-		case Token::COLLIDEDQ:
-			if (collided)
-				executeCode(*instruction._thenInstructions, shot, collided, timer);
+		case Token::NOP:
+			debugC(1, kFreescapeDebugCode, "Executing NOP at ip: %d", ip);
+			break;
+
+		case Token::CONDITIONAL:
+			if (checkConditional(instruction, shot, collided, timer, activated))
+				executeCode(*instruction._thenInstructions, shot, collided, timer, activated);
 			// else branch is always empty
 			assert(instruction._elseInstructions == nullptr);
 			break;
-		case Token::SHOTQ:
-			if (shot)
-				executeCode(*instruction._thenInstructions, shot, collided, timer);
-			// else branch is always empty
-			assert(instruction._elseInstructions == nullptr);
-			break;
-		case Token::TIMERQ:
-			if (timer)
-				executeCode(*instruction._thenInstructions, shot, collided, timer);
-			// else branch is always empty
-			assert(instruction._elseInstructions == nullptr);
-			break;
+
 		case Token::VARNOTEQ:
 			if (executeEndIfNotEqual(instruction))
 				ip = codeSize;
 			break;
+		case Token::IFGTEQ:
+			skip = !checkIfGreaterOrEqual(instruction);
+			break;
+
+		case Token::ELSE:
+			skip = !skip;
+			break;
+
+		case Token::ENDIF:
+			skip = false;
+			break;
+
 		case Token::SWAPJET:
 			executeSwapJet(instruction);
 			break;
@@ -187,6 +204,9 @@ void FreescapeEngine::executeCode(FCLInstructionVector &code, bool shot, bool co
 		case Token::REDRAW:
 			executeRedraw(instruction);
 			break;
+		case Token::EXECUTE:
+			executeExecute(instruction);
+			break;
 		case Token::DELAY:
 			executeDelay(instruction);
 			break;
@@ -198,6 +218,9 @@ void FreescapeEngine::executeCode(FCLInstructionVector &code, bool shot, bool co
 			break;
 		case Token::CLEARBIT:
 			executeClearBit(instruction);
+			break;
+		case Token::TOGGLEBIT:
+			executeToggleBit(instruction);
 			break;
 		case Token::PRINT:
 			executePrint(instruction);
@@ -228,7 +251,21 @@ void FreescapeEngine::executeRedraw(FCLInstruction &instruction) {
 	_gfx->flipBuffer();
 	g_system->updateScreen();
 	g_system->delayMillis(10);
-	waitForSounds();
+
+	drawFrame();
+	_gfx->flipBuffer();
+	g_system->updateScreen();
+	g_system->delayMillis(isCPC() ? 100 : 10);
+
+	if (_syncSound) {
+		waitForSounds();
+	}
+}
+
+void FreescapeEngine::executeExecute(FCLInstruction &instruction) {
+	// TODO
+	uint16 objId = instruction._source;
+	debugC(1, kFreescapeDebugCode, "Executing instructions from object %d", objId);
 }
 
 void FreescapeEngine::executeSound(FCLInstruction &instruction) {
@@ -249,7 +286,7 @@ void FreescapeEngine::executeDelay(FCLInstruction &instruction) {
 
 void FreescapeEngine::executePrint(FCLInstruction &instruction) {
 	uint16 index = instruction._source - 1;
-	debugC(1, kFreescapeDebugCode, "Printing message %d", index);
+	debugC(1, kFreescapeDebugCode, "Printing message %d: \"%s\"", index, _messagesList[index].c_str());
 	_currentAreaMessages.clear();
 	_currentAreaMessages.push_back(_messagesList[index]);
 }
@@ -319,6 +356,31 @@ bool FreescapeEngine::executeEndIfVisibilityIsEqual(FCLInstruction &instruction)
 
 	return (obj->isInvisible() == (value != 0));
 }
+
+bool FreescapeEngine::checkConditional(FCLInstruction &instruction, bool shot, bool collided, bool timer, bool activated) {
+	uint16 conditional = instruction._source;
+	bool result = false;
+
+	if (conditional & kConditionalShot)
+		result |= shot;
+	if (conditional & kConditionalTimeout)
+		result |= timer;
+	if (conditional & kConditionalCollided)
+		result |= collided;
+	if (conditional & kConditionalActivated)
+		result |= activated;
+
+	debugC(1, kFreescapeDebugCode, "Check if conditional %x is true: %d!", conditional, result);
+	return result;
+}
+
+bool FreescapeEngine::checkIfGreaterOrEqual(FCLInstruction &instruction) {
+	uint16 variable = instruction._source;
+	uint16 value = instruction._destination;
+	debugC(1, kFreescapeDebugCode, "Check if variable %d is greater than equal to %d!", variable, value);
+	return (_gameStateVars[variable] >= value);
+}
+
 
 bool FreescapeEngine::executeEndIfNotEqual(FCLInstruction &instruction) {
 	uint16 variable = instruction._source;

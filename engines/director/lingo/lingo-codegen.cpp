@@ -386,7 +386,7 @@ void LingoCompiler::registerFactory(Common::String &name) {
 			_assemblyArchive->factoryContexts[_assemblyId] = new Common::HashMap<Common::String, ScriptContext *>();
 		}
 		if (!_assemblyArchive->factoryContexts[_assemblyId]->contains(name)) {
-			*_assemblyContext->_refCount += 1;
+			_assemblyContext->incRefCount();
 			(*_assemblyArchive->factoryContexts[_assemblyId])[name] = _assemblyContext;
 		}
 	}
@@ -1404,6 +1404,12 @@ bool LingoCompiler::visitTheOfNode(TheOfNode *node) {
 
 bool LingoCompiler::visitTheNumberOfNode(TheNumberOfNode *node) {
 	switch (node->type) {
+	case kNumberOfCastlibs:
+		codeInt(0); // Put dummy id
+		code1(LC::c_theentitypush);
+		codeInt(kTheCastlibs);
+		codeInt(kTheNumber);
+		break;
 	case kNumberOfChars:
 		COMPILE(node->arg);
 		codeFunc("numberOfChars", 1);
@@ -1437,6 +1443,12 @@ bool LingoCompiler::visitTheNumberOfNode(TheNumberOfNode *node) {
 		codeInt(0); // Put dummy id
 		code1(LC::c_theentitypush);
 		codeInt(kTheMenus);
+		codeInt(kTheNumber);
+		break;
+	case kNumberOfXtras:
+		codeInt(0); // Put dummy id
+		code1(LC::c_theentitypush);
+		codeInt(kTheXtras);
 		codeInt(kTheNumber);
 		break;
 	}

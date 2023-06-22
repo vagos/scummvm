@@ -85,6 +85,7 @@ maniac	Maniac Mansion
 
 	f0d294891b813d3dcc525b89bc318815	1988	ru	DOS	V2	V2	-	Fan translation?, sev
 	06865ea0fae1aeef2d6b96d8ae7ecc41	1988	ru	DOS	V2	V2	-	Fan translation	PRCA RuSCUMM 1.0
+	7c731228dc1cdc33ed426313d89d07e7	1988	he	DOS	V2	V2	-	Hebrew fan translation
 
 zak	Zak McKracken and the Alien Mindbenders
 	254fede2f15dbb32a23760d601b01816	1914	en	C64	V1	-	-
@@ -188,6 +189,7 @@ loom	Loom
 	c7689be9f82426f9a7c8906f62e64ab1	592280	en	Windows	Steam	Amazon	Amazon Games Launcher	Fancy2209
 
 	c5d10e190d4b4d59114b824f2fdbd00e	7540	en	FM-TOWNS	FM-TOWNS	-	-	dhewg, Andrea Petrucci
+	1ba1f030ad387be3d7e8d278006bdfde	7540	he	FM-TOWNS	FM-TOWNS	-	-	phcoder
 	31b8fda4c8c7413fa6b39997e776eba4	-1	jp	FM-TOWNS	FM-TOWNS	-	-	khalek, Andrea Petrucci
 
 	0aa050f4ad79402fbe9c4f78fb8ac494	6532	en	PC-Engine	PC-Engine	-	-	Kirben
@@ -318,6 +320,7 @@ atlantis	Indiana Jones and the Fate of Atlantis
 	d6dd0646404768a63e963891a96daadd	12035	en	Mac	Floppy	Floppy	two data files	Fingolfin
 
 	182344899c2e2998fca0bebcd82aa81a	12035	en	DOS	-	CD	V1.0 10/9/92	Fingolfin
+	8d6a88fc58b72785621712fcffc03141	12035	he	DOS	-	CD	V1.0 10/9/92	phcoder
 	f3c5d9bf3f091bd1f18dc1013fba5396	638976	en	Windows	Steam	Steam	Steam Version	Ben Castricum, Filippos Karapetis
 	6a8133b63d46f6663fbcbb49d5a2edb1	520548	en	Mac	Steam	Steam	Steam Version	Filippos Karapetis
 	1a6e5ae2777a6a33f06ffc0226210934	11885	en	Mac	-	CD	V1.0 10/9/92	Scott Summers
@@ -349,7 +352,7 @@ tentacle	Day of the Tentacle
 	94aaedbb8f26d71ed3ad6dd34490e29e	-1	fr	DOS	Floppy	Floppy	alt?	Nicolas Joly
 	57b0d89af79befe1cabce3bece869e7f	-1	de	DOS	Floppy	Floppy	-	Andrej Sinicyn, Andrea Petrucci
 	50fcdc982a25063b78ad46bf389b8e8d	-1	it	DOS	Floppy	Floppy	-	Andrea Petrucci
-	ae94f110a14ce71fc515d5b648827a8f	-1	es	DOS	Floppy	Floppy	-	abnog, Andrea Petrucci
+	ae94f110a14ce71fc515d5b648827a8f	7932	es	DOS	Floppy	Floppy	-	abnog, Andrea Petrucci
 
 	4167a92a1d46baa4f4127d918d561f88	7932	en	All?	-	CD	1.6	Fingolfin
 	8aa05d3cdb0e795436043f0546af2da2	7932	fr	All?	-	CD	-	Andrea Petrucci
@@ -365,12 +368,13 @@ tentacle	Day of the Tentacle
 	17fa250eb72dae2dad511ba79c0b6b0a	7477	fr	DOS	-	Demo	-	cyx
 	ac1642b6edfb8521ca03760126f1c250	7477	de	DOS	-	Demo	-	Simon Krumrein, sev
 	2a41b53cf1a90b6e6f26c10cc6041084	2439158	en	Mac	-	Demo	Mac bundle	Fingolfin
+
 	e47bcf709d7ab8470bdbfaf02d434e60	-1	ko	DOS	Floppy	Floppy	Fan translation	ScummVM-Kor
 	a4b30b29a419d49a2ab33bd4414939d1	-1	ko	All?	-	CD	Fan translation	ScummVM-Kor
 
 samnmax	Sam &amp; Max Hit the Road
-	3b301b7892f883ce42ab4be6a274fea6	-1	en	DOS	Floppy	Floppy	-	Andrea Petrucci
-	a3036878840720fbefa41e6965fa4a0a	-1	en	DOS	Floppy	Floppy	alt?	Andrea Petrucci
+	3b301b7892f883ce42ab4be6a274fea6	9040	en	DOS	Floppy	Floppy	-	Andrea Petrucci
+	a3036878840720fbefa41e6965fa4a0a	9040	en	DOS	Floppy	Floppy	alt?	Andrea Petrucci
 	ef347474f3c7be3b29584eaa133cca05	9040	fr	DOS	Floppy	Floppy	v1.1, 01/28/93	Nicolas Sauz&egrave;de, Andrea Petrucci
 	f27b1ba0eadaf2a6617b2b58192d1dbf	9040	de	DOS	Floppy	Floppy	-	dhewg, Andrea Petrucci
 	b289a2a8cbedbf45786e0b4ad2f510f1	-1	it	DOS	Floppy	Floppy	-	Andrea Petrucci
@@ -379,8 +383,8 @@ samnmax	Sam &amp; Max Hit the Road
 	d917f311a448e3cc7239c31bddb00dd2	9080	en	All?	-	CD	CD1.11, 3/24/94	Fingolfin
 	7edd665bbede7ea8b7233f8e650be6f8	9080	fr	All?	-	CD	v1.2, 31/10/94	Andrea Petrucci
 	0fb73eddfcf584c02ba097984df131ba	9080	de	All?	-	CD	v1.0, 23/06/94 	Fingolfin
-	0f6f2e716ba896a44e5059bba1de7ca9	-1	it	All?	-	CD	-	Andrea Petrucci
-	4ba7fb331296c283e73d8f5b2096e551	-1	es	All?	-	CD	-	Andrea Petrucci
+	0f6f2e716ba896a44e5059bba1de7ca9	9080	it	All?	-	CD	-	Andrea Petrucci
+	4ba7fb331296c283e73d8f5b2096e551	9080	es	All?	-	CD	-	Andrea Petrucci
 	d43352a805d78b5f4936c6d7779bf575	-1	ru	DOS	-	CD	-
 	166553538ff320c69edafeee29525419	199195304	en	Mac	-	CD	Mac bundle	Joachim Eberhard
 	3a5d13675e9a23aedac0bac7730f0ac1	228446581	fr	Mac	-	CD	Mac bundle	ThierryFR, Thierry Crozat
@@ -389,9 +393,10 @@ samnmax	Sam &amp; Max Hit the Road
 	0e4c5d54a0ad4b26132e78b5ea76642a	6485	en	DOS	Floppy	Demo	WIP	Fingolfin
 	d9d0dd93d16ab4dec55cabc2b86bbd17	6478	en	DOS	-	Demo	non-interactive	Fingolfin
 	cc8ba2b0df2f9c450bcf055fe2711979	7485	de	DOS	Floppy	Demo	-	Simon Krumrein, sev, Fingolfin
-	0425954a9db5c340861672892c3e678d	-1	en	All	-	Demo	-	Kirben
+	0425954a9db5c340861672892c3e678d	7505	en	All	-	Demo	-	Kirben
 	b9fce749c3e9da0d41c78213c179631b	7505	en	DOS	CD	Demo	-	eientei
 	6dead580b0ff14d5f7b33b4219f04159	16556335	en	Mac	-	Demo	Mac bundle	Fingolfin
+	31b614ab9a637f771f39405f0500da86	9080	he	DOS	-	CD	-	Hebrew fan translation
 
 ft	Full Throttle
 	41958e24d03181ff9a381a66d048a581	-1	br	All?	-	-	-	Danilo E.S.
@@ -410,6 +415,7 @@ ft	Full Throttle
 	32a433dea56b86a55b59e4ff7d755711	7885	en	DOS	Demo	Demo	-
 	9d7b67be003fea60be4dcbd193611936	11164	en	Mac	Demo	Demo	-	Fingolfin
 	9b7452b5cd6d3ffb2b2f5118010af84f	116463537	en	Mac	Demo	Demo	Mac bundle	Fingolfin, Joachim Eberhard
+	8ead2c01c48c2e3d15d6a89b86cd84ab	19697	he	DOS	-	-	-	Hebrew fan translation
 
 dig	The Dig
 	d8323015ecb8b10bf53474f6e6b0ae33	16304	All	All	-	-	-	Fingolfin
@@ -424,6 +430,7 @@ dig	The Dig
 
 	362c1d281fb9899254cda66ad246c66a	3472	en	All	Demo	Demo	-	Fingolfin
 	cd9c05e755d7bf8e9b9590ad1ebe273e	45156007	en	Mac	Demo	Demo	Mac bundle	Fingolfin
+	3221ab85c833fbc0e6cf54ad55b4c082	16304	he	DOS	-	-	-	Hebrew fan translation
 
 comi	The Curse of Monkey Island
 	fe60d6b5ff51b0553ac59963123b5777	76791	All	Windows	-	-	-	Fingolfin
@@ -849,7 +856,7 @@ puttputt	Putt-Putt Joins the Parade
 	7e151c17adf624f1966c8fc5827c95e9	-1	en	3DO	HE 61	-	-	khalek
 	be2abe172f58db170de3a037daa1dd27	-1	jp	3DO	HE 61	-	-	clone2727
 	ee41f6afbc5b26fa475754b56fe92048	8032	jp	3DO	HE 61	-	-	George Kormendi
-	9708cf716ed8bcc9ff3fcfc69413b746	-1	en	DOS	HE 62	-	-	khalek
+	9708cf716ed8bcc9ff3fcfc69413b746	8117	en	DOS	HE 62	-	-	khalek
 	e361a7058ed8e8ebb462663c0a3ae8d6	-1	he	DOS	HE 62	-	-	sev
 	684732efb5799c0f78804c99d8de9aba	-1	en	Mac	HE 62	-	-	khalek
 	6a30a07f353a75cdc602db27d73e1b42	12728	en	Windows	HE 70	-	-	khalek
@@ -931,6 +938,7 @@ funpack	Putt-Putt's Fun Pack
 	3d219e7546039543307b55a91282bf18	-1	en	DOS	-	-	-	iziku
 	46b53fd430adcfbed791b48a0d4b079f	-1	en	DOS	-	-	-	khalek
 	90a329d8ad5b7ce0690429e98cfbb32f	-1	he	DOS	-	-	-
+	61fa2dd4dc9e58347c4de5f4243a3ba6	5798	jp	Mac	-	-	-	HerbFargus
 
 PuttsFunShop	Putt-Putt's One-Stop Fun Shop
 	5262a27afcaee04e5c4900220bd463e7	35741	us	All	-	-	-	Kirben

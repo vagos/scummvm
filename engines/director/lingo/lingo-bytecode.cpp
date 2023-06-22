@@ -26,10 +26,11 @@
 
 #include "director/director.h"
 #include "director/cast.h"
-#include "director/castmember.h"
 #include "director/movie.h"
 #include "director/util.h"
 #include "director/window.h"
+#include "director/castmember/castmember.h"
+#include "director/castmember/script.h"
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-code.h"
 #include "director/lingo/lingo-codegen.h"
@@ -253,6 +254,8 @@ static LingoV4TheEntity lingoV4TheEntity[] = {
 	{ 0x08, 0x01, kThePerFrameHook,		kTheNOField,		true, kTEANOArgs },
 	{ 0x08, 0x02, kTheCastMembers,		kTheNumber,			false, kTEANOArgs },
 	{ 0x08, 0x03, kTheMenus,			kTheNumber,			false, kTEANOArgs },
+	{ 0x08, 0x04, kTheCastlibs,			kTheNumber,			false, kTEANOArgs }, // D5
+	{ 0x08, 0x05, kTheXtras,			kTheNumber,			false, kTEANOArgs }, // D5
 
 	{ 0x09, 0x01, kTheCast,				kTheName,			true, kTEAItemId },
 	{ 0x09, 0x02, kTheCast,				kTheText,			true, kTEAItemId },
@@ -1146,6 +1149,11 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 
 	// read each entry in the reference table.
 	stream.seek(constsOffset);
+	int constsIndexSize = MAX((int)constsStoreOffset - (int)constsOffset, 0);
+	if (debugChannelSet(5, kDebugLoading)) {
+		debugC(5, kDebugLoading, "Lscr consts index:");
+		stream.hexdump(constsIndexSize);
+	}
 	for (uint16 i = 0; i < constsCount; i++) {
 		Datum constant;
 		uint32 constType = 0;
@@ -1154,6 +1162,7 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 		} else {
 			constType = (uint32)stream.readUint16();
 		}
+
 		uint32 value = stream.readUint32();
 		switch (constType) {
 		case 1: // String type
@@ -1208,24 +1217,26 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 					break;
 				}
 
-				// Floats are stored as an "80 bit IEEE Standard 754 floating
-				// point number (Standard Apple Numeric Environment [SANE] data type
-				// Extended).
-				if (length != 10) {
-					error("Constant float expected to be 10 bytes");
-					break;
-				}
-				uint16 signAndExponent = READ_BE_UINT16(&constsStore[pointer]);
-				uint64 mantissa = READ_BE_UINT64(&constsStore[pointer+2]);
+				if (length == 10) {
+					// Floats are stored as an "80 bit IEEE Standard 754 floating
+					// point number (Standard Apple Numeric Environment [SANE] data type
+					// Extended).
+					uint16 signAndExponent = READ_BE_UINT16(&constsStore[pointer]);
+					uint64 mantissa = READ_BE_UINT64(&constsStore[pointer+2]);
 
-				constant.u.f = Common::XPFloat(signAndExponent, mantissa).toDouble(Common::XPFloat::kSemanticsSANE);
+					constant.u.f = Common::XPFloat(signAndExponent, mantissa).toDouble(Common::XPFloat::kSemanticsSANE);
+				} else if (length == 8) {
+					constant.u.f = READ_BE_FLOAT64(&constsStore[pointer]);
+				} else {
+					error("Constant float expected to be 8 or 10 bytes but got %d", length);
+				}
+
 			}
 			break;
 		default:
 			warning("Unknown constant type %d", constType);
 			break;
 		}
-
 		_assemblyContext->_constants.push_back(constant);
 	}
 	free(constsStore);
@@ -1368,15 +1379,27 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 			Common::hexdump(codeStore, length, 16, startOffset);
 		}
 
-		uint16 pointer = startOffset - codeStoreOffset;
+		uint32 pointer = startOffset - codeStoreOffset;
 		Common::Array<uint32> offsetList;
 		Common::Array<uint32> jumpList;
+
+		// Size of an entry in the consts index.
+		int constEntrySize = 0;
+		if (version >= kFileVer500) {
+			// For D5 this is uint32 type + uint32 offset
+			constEntrySize = 8;
+		} else {
+			// For D4 this is uint16 type + uint32 offset
+			constEntrySize = 6;
+		}
+
 		while (pointer < startOffset + length - codeStoreOffset) {
 			uint8 opcode = codeStore[pointer];
 			pointer += 1;
 
 			if (opcode == 0x44 || opcode == 0x84) {
-				// push a constant
+				// Opcode for pushing a value from the constants table.
+				// Rewrite these to inline the constant into our bytecode.
 				offsetList.push_back(_currentAssembly->size());
 				int arg = 0;
 				if (opcode == 0x84) {
@@ -1386,11 +1409,12 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 					arg = (uint8)codeStore[pointer];
 					pointer += 1;
 				}
-				// remove struct size alignment
-				if (arg % 6) {
-					warning("Opcode 0x%02x arg %d not a multiple of 6!", opcode, arg);
+				// The argument is a byte offset to an entry in the consts index.
+				// As such, it should be an exact multiple of the entry size.
+				if (arg % constEntrySize) {
+					warning("Opcode 0x%02x arg %d not a multiple of %d", opcode, arg, constEntrySize);
 				}
-				arg /= 6;
+				arg /= constEntrySize;
 				Datum constant = _assemblyContext->_constants[arg];
 				switch (constant.type) {
 				case INT:
@@ -1468,10 +1492,10 @@ ScriptContext *LingoCompiler::compileLingoV4(Common::SeekableReadStreamEndian &s
 							break;
 						case 'p':
 							// argument is some kind of denormalised offset
-							if (arg % 6) {
-								warning("Argument %d was expected to be a multiple of 6", arg);
+							if (arg % constEntrySize) {
+								warning("Argument %d was expected to be a multiple of %d", arg, constEntrySize);
 							}
-							arg /= 6;
+							arg /= constEntrySize;
 							break;
 						case 'a':
 							// argument is a function argument ID
@@ -1615,7 +1639,7 @@ void LingoArchive::addCodeV4(Common::SeekableReadStreamEndian &stream, uint16 lc
 	ScriptContext *ctx = g_lingo->_compiler->compileLingoV4(stream, lctxIndex, this, archName, version);
 	if (ctx) {
 		lctxContexts[lctxIndex] = ctx;
-		*ctx->_refCount += 1;
+		ctx->incRefCount();
 	}
 }
 

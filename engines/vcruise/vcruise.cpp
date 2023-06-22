@@ -21,12 +21,18 @@
 
 #include "engines/util.h"
 
+#include "common/compression/gentee_installer.h"
+
 #include "common/config-manager.h"
 #include "common/events.h"
+#include "common/file.h"
 #include "common/stream.h"
+#include "common/savefile.h"
 #include "common/system.h"
 #include "common/algorithm.h"
 #include "common/translation.h"
+
+#include "audio/mixer.h"
 
 #include "gui/message.h"
 
@@ -37,8 +43,6 @@ namespace VCruise {
 
 VCruiseEngine::VCruiseEngine(OSystem *syst, const VCruiseGameDescription *gameDesc) : Engine(syst), _gameDescription(gameDesc) {
 	const Common::FSNode gameDataDir(ConfMan.get("path"));
-
-	SearchMan.addDirectory(gameDataDir.getPath(), gameDataDir, 0, 3);
 }
 
 VCruiseEngine::~VCruiseEngine() {
@@ -61,6 +65,9 @@ void VCruiseEngine::handleEvents() {
 			break;
 		case Common::EVENT_KEYDOWN:
 			_runtime->onKeyDown(evt.kbd.keycode);
+			break;
+		case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
+			_runtime->onKeymappedEvent(static_cast<VCruise::KeymappedEvent>(evt.customType));
 			break;
 		default:
 			break;
@@ -97,7 +104,20 @@ Common::Error VCruiseEngine::run() {
 	}
 #endif
 
-	
+	if (_gameDescription->desc.flags & VCRUISE_GF_GENTEE_PACKAGE) {
+		Common::File *f = new Common::File();
+
+		if (!f->open(_gameDescription->desc.filesDescriptions[0].fileName))
+			error("Couldn't open installer package '%s'", _gameDescription->desc.filesDescriptions[0].fileName);
+
+		Common::Archive *installerPackageArchive = Common::createGenteeInstallerArchive(f, "#setuppath#\\", true);
+		if (!installerPackageArchive)
+			error("Couldn't load installer package '%s'", _gameDescription->desc.filesDescriptions[0].fileName);
+
+		SearchMan.add("VCruiseInstallerPackage", installerPackageArchive);
+	}
+
+	syncSoundSettings();
 
 	const Graphics::PixelFormat *fmt16_565 = nullptr;
 	const Graphics::PixelFormat *fmt16_555 = nullptr;
@@ -158,10 +178,13 @@ Common::Error VCruiseEngine::run() {
 
 	_system->fillScreen(0);
 
-	_runtime.reset(new Runtime(_system, _mixer, _rootFSNode, _gameDescription->gameID));
-	_runtime->initSections(_videoRect, _menuBarRect, _trayRect, _system->getScreenFormat());
+	_runtime.reset(new Runtime(_system, _mixer, _rootFSNode, _gameDescription->gameID, _gameDescription->defaultLanguage));
+	_runtime->initSections(_videoRect, _menuBarRect, _trayRect, Common::Rect(640, 480), _system->getScreenFormat());
 
 	const char *exeName = _gameDescription->desc.filesDescriptions[0].fileName;
+
+	if (_gameDescription->desc.flags & VCRUISE_GF_GENTEE_PACKAGE)
+		exeName = "Schizm.exe";
 
 	_runtime->loadCursors(exeName);
 
@@ -197,6 +220,12 @@ Common::Error VCruiseEngine::run() {
 
 	_runtime.reset();
 
+	if (_gameDescription->desc.flags & VCRUISE_GF_GENTEE_PACKAGE)
+		SearchMan.remove("VCruiseInstallerPackage");
+
+	// Flush any settings changes made in-game
+	ConfMan.flushToDisk();
+
 	return Common::kNoError;
 }
 
@@ -213,6 +242,42 @@ bool VCruiseEngine::hasFeature(EngineFeature f) const {
 	default:
 		return false;
 	};
+}
+
+void VCruiseEngine::syncSoundSettings() {
+	// Sync the engine with the config manager
+	int soundVolumeMusic = ConfMan.getInt("music_volume");
+	int soundVolumeSFX = ConfMan.getInt("sfx_volume");
+	int soundVolumeSpeech = ConfMan.getInt("speech_volume");
+
+	bool mute = false;
+	if (ConfMan.hasKey("mute"))
+		mute = ConfMan.getBool("mute");
+
+	// We need to handle the speech mute separately here. This is because the
+	// engine code should be able to rely on all speech sounds muted when the
+	// user specified subtitles only mode, which results in "speech_mute" to
+	// be set to "true". The global mute setting has precedence over the
+	// speech mute setting though.
+	bool speechMute = mute;
+	if (!speechMute)
+		speechMute = ConfMan.getBool("speech_mute");
+
+	bool muteSound = ConfMan.getBool("vcruise_mute_sound");
+	if (ConfMan.hasKey("vcruise_mute_sound"))
+		muteSound = ConfMan.getBool("vcruise_mute_sound");
+
+	// We don't mute music here because Schizm has a special behavior that bypasses music mute when using one
+	// of the ships to transition zones.
+	_mixer->muteSoundType(Audio::Mixer::kPlainSoundType, mute || muteSound);
+	_mixer->muteSoundType(Audio::Mixer::kMusicSoundType, mute);
+	_mixer->muteSoundType(Audio::Mixer::kSFXSoundType, mute || muteSound);
+	_mixer->muteSoundType(Audio::Mixer::kSpeechSoundType, speechMute || muteSound);
+
+	_mixer->setVolumeForSoundType(Audio::Mixer::kPlainSoundType, Audio::Mixer::kMaxMixerVolume);
+	_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, soundVolumeMusic);
+	_mixer->setVolumeForSoundType(Audio::Mixer::kSFXSoundType, soundVolumeSFX);
+	_mixer->setVolumeForSoundType(Audio::Mixer::kSpeechSoundType, soundVolumeSpeech);
 }
 
 Common::Error VCruiseEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
@@ -266,11 +331,11 @@ Common::Error VCruiseEngine::loadGameStream(Common::SeekableReadStream *stream) 
 }
 
 bool VCruiseEngine::canSaveAutosaveCurrently() {
-	return _runtime->canSave();
+	return _runtime->canSave(false);
 }
 
 bool VCruiseEngine::canSaveGameStateCurrently() {
-	return _runtime->canSave();
+	return _runtime->canSave(false);
 }
 
 bool VCruiseEngine::canLoadGameStateCurrently() {
@@ -280,7 +345,111 @@ bool VCruiseEngine::canLoadGameStateCurrently() {
 void VCruiseEngine::initializePath(const Common::FSNode &gamePath) {
 	Engine::initializePath(gamePath);
 
+	const char *gameSubPath = nullptr;
+
+	if (_gameDescription->desc.flags & VCRUISE_GF_GENTEE_PACKAGE) {
+		if (_gameDescription->gameID == GID_SCHIZM)
+			gameSubPath = "Schizm";
+	}
+
+	if (gameSubPath) {
+		const int kNumCasePasses = 3;
+
+		for (int casePass = 0; casePass < kNumCasePasses; casePass++) {
+			Common::String subPathStr(gameSubPath);
+
+			if (casePass == 1)
+				subPathStr.toUppercase();
+			else if (casePass == 2)
+				subPathStr.toLowercase();
+
+			Common::FSNode gameSubDir = gamePath.getChild(subPathStr);
+			if (gameSubDir.isDirectory()) {
+				SearchMan.addDirectory("VCruiseGameDir", gameSubDir, 0, 3);
+				break;
+			}
+
+			if (casePass != kNumCasePasses - 1)
+				warning("Expected to find subpath '%s' in the game directory but couldn't find it", gameSubPath);
+		}
+	}
+
 	_rootFSNode = gamePath;
 }
+
+bool VCruiseEngine::hasDefaultSave() {
+	return hasAnySave();
+}
+
+bool VCruiseEngine::hasAnySave() {
+	Common::StringArray saveFiles = getSaveFileManager()->listSavefiles(_targetName + ".*");
+	return saveFiles.size() > 0;
+}
+
+Common::Error VCruiseEngine::loadMostRecentSave() {
+	Common::SaveFileManager *sfm = getSaveFileManager();
+
+	Common::StringArray saveFiles = sfm->listSavefiles(_targetName + ".*");
+
+	uint64 highestDateTime = 0;
+	uint32 highestPlayTime = 0;
+	Common::String highestSaveFileName;
+
+	for (const Common::String &saveFileName : saveFiles) {
+		Common::InSaveFile *saveFile = sfm->openForLoading(saveFileName);
+
+		if (!saveFile) {
+			warning("Couldn't load save file '%s' to determine recency", saveFileName.c_str());
+			continue;
+		}
+
+		ExtendedSavegameHeader header;
+		bool loadedHeader = getMetaEngine()->readSavegameHeader(saveFile, &header, true);
+		if (!loadedHeader) {
+			warning("Couldn't parse header from '%s'", saveFileName.c_str());
+			continue;
+		}
+
+		uint8 day = 0;
+		uint8 month = 0;
+		uint16 year = 0;
+
+		uint8 hour = 0;
+		uint8 minute = 0;
+
+		MetaEngine::decodeSavegameDate(&header, year, month, day);
+		MetaEngine::decodeSavegameTime(&header, hour, minute);
+
+		uint64 dateTime = static_cast<uint64>(year) << 32;
+		dateTime |= static_cast<uint64>(month) << 24;
+		dateTime |= static_cast<uint64>(day) << 16;
+		dateTime |= static_cast<uint64>(hour) << 8;
+		dateTime |= minute;
+
+		uint32 playTime = header.playtime;
+
+		if (dateTime > highestDateTime || (dateTime == highestDateTime && playTime > highestPlayTime)) {
+			highestSaveFileName = saveFileName;
+			highestDateTime = dateTime;
+			highestPlayTime = playTime;
+		}
+	}
+
+	if (highestSaveFileName.empty()) {
+		warning("Couldn't find any valid saves to load");
+		return Common::Error(Common::kReadingFailed);
+	}
+
+	Common::String slotStr = highestSaveFileName.substr(_targetName.size() + 1);
+
+	int slot = 0;
+	if (sscanf(slotStr.c_str(), "%i", &slot) != 1) {
+		warning("Couldn't parse save slot ID from %s", highestSaveFileName.c_str());
+		return Common::Error(Common::kReadingFailed);
+	}
+
+	return loadGameState(slot);
+}
+
 
 } // End of namespace VCruise

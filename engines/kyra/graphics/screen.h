@@ -49,10 +49,10 @@ struct ScreenDim {
 	uint16 sy;
 	uint16 w;
 	uint16 h;
-	uint16 unk8;
-	uint16 unkA;
-	uint16 unkC;
-	uint16 unkE;
+	uint16 col1;
+	uint16 col2;
+	uint16 line;
+	uint16 column;
 };
 
 /**
@@ -66,6 +66,7 @@ public:
 	 */
 	enum Type {
 		kASCII = 0,
+		kJIS_X0201,
 		kSJIS,
 		kBIG5,
 		kJohab
@@ -271,6 +272,7 @@ public:
 	void drawChar(uint16 c, byte *dst, int pitch, int) const override;
 
 protected:
+	uint32 getGlyphDataSize() const { return _glyphDataSize; }
 	uint16 _textColor[2];
 	bool _pixelColorShading;
 	const uint8 *_colorMap;
@@ -363,6 +365,32 @@ private:
 	uint32 getFontOffset(uint16 c) const override;
 	void processColorMap() override;
 };
+
+#ifdef ENABLE_LOL
+
+class ChineseOneByteFontLoL final : public ChineseFont {
+public:
+	ChineseOneByteFontLoL(int pitch) : ChineseFont(pitch, 8, 14, 8, 16, 0, 0) { _pixelColorShading = false; }
+	void setStyles(int styles) override {}
+	
+private:
+	bool hasGlyphForCharacter(uint16 c) const override { return !(c & 0x80); }
+	uint32 getFontOffset(uint16 c) const override { return (c & 0x7F) * 14; }
+	void processColorMap() override;
+};
+
+class ChineseTwoByteFontLoL final : public ChineseFont {
+public:
+	ChineseTwoByteFontLoL(int pitch) : ChineseFont(pitch, 16, 14, 16, 16, 0, 0) { _pixelColorShading = false; }
+	void setStyles(int styles) override {}
+
+private:
+	bool hasGlyphForCharacter(uint16 c) const override { return (c & 0x80) && getFontOffset(c) < getGlyphDataSize(); }
+	uint32 getFontOffset(uint16 c) const override;
+	void processColorMap() override;
+};
+
+#endif
 
 class ChineseOneByteFontHOF final : public ChineseFont {
 public:

@@ -48,7 +48,7 @@ public:
 	void clear();
 
 	void addTextLine(const Common::String &text);
-	void onScrollbarPositionChanged(float data);
+	void overrideFontID(const uint fontID) { _fontIDOverride = fontID; };
 
 	static void assembleTextLine(char *rawCaption, Common::String &output, uint size);
 
@@ -62,6 +62,9 @@ private:
 	};
 
 	Graphics::ManagedSurface _fullSurface;
+	Graphics::ManagedSurface _textHighlightSurface;
+
+	RenderObject _highlightRObj;
 
 	Scrollbar *_scrollbar;
 
@@ -73,6 +76,8 @@ private:
 
 	bool _needsTextRedraw;
 	float _scrollbarPos;
+
+	int _fontIDOverride;
 
 	static const char _CCBeginToken[];
 	static const char _CCEndToken[];

@@ -171,6 +171,16 @@ GeometricObject::GeometricObject(
 }
 
 void GeometricObject::setOrigin(Math::Vector3d origin_) {
+	if (isPolygon(_type)) {
+		Math::Vector3d offset = origin_ - _origin;
+		offset = 32 * offset;
+		for (int i = 0; i < int(_ordinates->size()); i = i + 3) {
+			(*_ordinates)[i    ] += uint16(offset.x());
+			(*_ordinates)[i + 1] += uint16(offset.y());
+			(*_ordinates)[i + 2] += uint16(offset.z());
+		}
+	}
+
 	_origin = origin_;
 	computeBoundingBox();
 }
@@ -367,12 +377,7 @@ bool GeometricObject::collides(const Math::AABB &boundingBox_) {
 	if (isDestroyed() || isInvisible() || !_boundingBox.isValid() || !boundingBox_.isValid())
 		return false;
 
-	return (_boundingBox.getMax().x() > boundingBox_.getMin().x() &&
-			_boundingBox.getMin().x() < boundingBox_.getMax().x() &&
-			_boundingBox.getMax().y() > boundingBox_.getMin().y() &&
-			_boundingBox.getMin().y() < boundingBox_.getMax().y() &&
-			_boundingBox.getMax().z() > boundingBox_.getMin().z() &&
-			_boundingBox.getMin().z() < boundingBox_.getMax().z());
+	return _boundingBox.collides(boundingBox_);
 }
 
 void GeometricObject::draw(Freescape::Renderer *gfx) {

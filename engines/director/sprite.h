@@ -83,7 +83,6 @@ public:
 	MacShape *getShape();
 	uint32 getForeColor();
 	uint32 getBackColor();
-	Common::Point getRegistrationOffset();
 
 	Frame *_frame;
 	Score *_score;
@@ -113,6 +112,7 @@ public:
 	bool _moveable;
 	bool _editable;
 	bool _puppet;
+	bool _autoPuppet; // autopuppet, based upon Director in a Nutshell, page 15
 	bool _immediate;
 	uint32 _backColor;
 	uint32 _foreColor;

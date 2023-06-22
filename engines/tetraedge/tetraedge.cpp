@@ -100,7 +100,7 @@ TeCore *TetraedgeEngine::getCore() {
 
 Game *TetraedgeEngine::getGame() {
 	if (_game == nullptr) {
-		if (gameType() == kAmerzone)
+		if (gameIsAmerzone())
 			_game = new AmerzoneGame();
 		else
 			_game = new SyberiaGame();
@@ -160,8 +160,20 @@ bool TetraedgeEngine::canSaveGameStateCurrently() {
 }
 
 bool TetraedgeEngine::canSaveAutosaveCurrently() {
-	return _game && _application && _game->running()
-		&& !_game->currentScene().empty() && !_game->currentZone().empty();
+	if (!_game || !_application)
+		return false;
+
+	bool sceneLoaded;
+
+	if (gameIsAmerzone()) {
+		AmerzoneGame *game = dynamic_cast<AmerzoneGame *>(_game);
+		assert(game);
+		sceneLoaded = (game->warpY() != nullptr);
+	} else {
+		sceneLoaded = !_game->currentScene().empty() && !_game->currentZone().empty();
+	}
+
+	return _game->running() && sceneLoaded;
 }
 
 Common::Error TetraedgeEngine::loadGameState(int slot) {
@@ -188,6 +200,12 @@ Common::Error TetraedgeEngine::loadGameStream(Common::SeekableReadStream *stream
 	return retval;
 }
 
+void TetraedgeEngine::closeGameDialogs() {
+	if (!_game)
+		return;
+	_game->closeDialogs();
+}
+
 void TetraedgeEngine::configureSearchPaths() {
 	const Common::FSNode gameDataDir(ConfMan.get("path"));
 	if (_gameDescription->platform != Common::kPlatformIOS)
@@ -195,19 +213,27 @@ void TetraedgeEngine::configureSearchPaths() {
 }
 
 int TetraedgeEngine::getDefaultScreenWidth() const {
-	return 800;
+	return gameIsAmerzone() ? 1280 : 800;
 }
 
 int TetraedgeEngine::getDefaultScreenHeight() const {
-	return 600;
+	return gameIsAmerzone() ? 800 : 600;
 }
 
 bool TetraedgeEngine::onKeyUp(const Common::KeyState &state) {
-	if (state.keycode == Common::KEYCODE_l) {
+	switch (state.keycode) {
+	case Common::KEYCODE_l:
 		if (loadGameDialog())
 			_game->initLoadedBackupData();
-	} else if (state.keycode == Common::KEYCODE_s) {
+		break;
+	case Common::KEYCODE_s:
 		saveGameDialog();
+		break;
+	case Common::KEYCODE_ESCAPE:
+		closeGameDialogs();
+		break;
+	default:
+		break;
 	}
 
 	return false;

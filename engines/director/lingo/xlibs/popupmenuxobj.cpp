@@ -102,10 +102,14 @@
  */
 
 #include "director/director.h"
+#include "director/window.h"
+
 #include "director/lingo/lingo.h"
 #include "director/lingo/lingo-object.h"
+#include "director/lingo/lingo-utils.h"
 #include "director/lingo/xlibs/popupmenuxobj.h"
 
+#include "graphics/macgui/macpopupmenu.h"
 
 namespace Director {
 
@@ -148,73 +152,73 @@ void PopUpMenuXObj::close(int type) {
 }
 
 
-PopUpMenuXObject::PopUpMenuXObject(ObjectType ObjectType) :Object<PopUpMenuXObject>("PopMenu") {
+PopUpMenuXObject::PopUpMenuXObject(ObjectType ObjectType) : Object<PopUpMenuXObject>("PopMenu") {
 	_objType = ObjectType;
 }
 
 void PopUpMenuXObj::m_new(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_new", nargs);
-	g_lingo->dropStack(nargs);
+	PopUpMenuXObject *me = static_cast<PopUpMenuXObject *>(g_lingo->_state->me.u.obj);
+
+	int menuId = g_lingo->pop().asInt();
+	Common::String menuList = g_lingo->pop().asString();
+
+	new Graphics::MacPopUp(menuId, g_director->_wm->getScreenBounds(), g_director->_wm, menuList.c_str());
+	me->_menuId = menuId;
+
 	g_lingo->push(g_lingo->_state->me);
 }
 
-void PopUpMenuXObj::m_appendMenu(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_appendMenu", nargs);
-	g_lingo->dropStack(nargs);
-}
-
-void PopUpMenuXObj::m_disableItem(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_disableItem", nargs);
-	g_lingo->dropStack(nargs);
-}
-
-void PopUpMenuXObj::m_enableItem(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_enableItem", nargs);
-	g_lingo->dropStack(nargs);
-}
-
-void PopUpMenuXObj::m_getItem(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_getItem", nargs);
-	g_lingo->dropStack(nargs);
-	g_lingo->push(Datum());
-}
-
-void PopUpMenuXObj::m_getMenuID(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_getMenuID", nargs);
-	g_lingo->dropStack(nargs);
-	g_lingo->push(Datum());
-}
-
 void PopUpMenuXObj::m_popNum(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_popNum", nargs);
-	g_lingo->dropStack(nargs);
-	g_lingo->push(Datum());
+	PopUpMenuXObject *me = static_cast<PopUpMenuXObject *>(g_lingo->_state->me.u.obj);
+
+	int itemNum = g_lingo->pop().asInt();
+	int top = g_lingo->pop().asInt();
+	int left = g_lingo->pop().asInt();
+
+	// Convert window coordinates to screen coordinates
+	Common::Rect windowRect = g_director->getCurrentWindow()->getInnerDimensions();
+	int screenTop = top + windowRect.top - 1;
+	int screenLeft = left + windowRect.left - 1;
+
+	Graphics::MacPopUp *menu = static_cast<Graphics::MacPopUp *>(g_director->_wm->getMenu(me->_menuId));
+	int selected = menu->drawAndSelectMenu(screenLeft, screenTop, itemNum);
+	g_lingo->push(Datum(selected));
 }
 
 void PopUpMenuXObj::m_popText(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_popText", nargs);
-	g_lingo->dropStack(nargs);
-	g_lingo->push(Datum());
-}
+	PopUpMenuXObject *me = static_cast<PopUpMenuXObject *>(g_lingo->_state->me.u.obj);
 
-void PopUpMenuXObj::m_setItem(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_setItem", nargs);
-	g_lingo->dropStack(nargs);
-}
+	int itemNum = g_lingo->pop().asInt();
+	int top = g_lingo->pop().asInt();
+	int left = g_lingo->pop().asInt();
 
-void PopUpMenuXObj::m_setItemMark(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_setItemMark", nargs);
-	g_lingo->dropStack(nargs);
+	// Convert window coordinates to screen coordinates
+	Common::Rect windowRect = g_director->getCurrentWindow()->getInnerDimensions();
+	int screenTop = top + windowRect.top - 1;
+	int screenLeft = left + windowRect.left - 1;
+
+	Graphics::MacPopUp *menu = static_cast<Graphics::MacPopUp *>(g_director->_wm->getMenu(me->_menuId));
+	int selected = menu->drawAndSelectMenu(screenLeft, screenTop, itemNum);
+	Common::String selectedText = menu->getItemText(selected);
+
+	g_lingo->push(Datum(selectedText));
 }
 
 void PopUpMenuXObj::m_smart(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_smart", nargs);
-	g_lingo->dropStack(nargs);
+	PopUpMenuXObject *me = static_cast<PopUpMenuXObject *>(g_lingo->_state->me.u.obj);
+	bool isSmart = g_lingo->pop().asInt() != 0;
+
+	Graphics::MacPopUp *menu = static_cast<Graphics::MacPopUp *>(g_director->_wm->getMenu(me->_menuId));
+	menu->setSmart(isSmart);
 }
 
-void PopUpMenuXObj::m_setItemIcon(int nargs) {
-	g_lingo->printSTUBWithArglist("PopUpMenuXObj::m_setItemIcon", nargs);
-	g_lingo->dropStack(nargs);
-}
+XOBJSTUBNR(PopUpMenuXObj::m_appendMenu)
+XOBJSTUBNR(PopUpMenuXObj::m_disableItem)
+XOBJSTUBNR(PopUpMenuXObj::m_enableItem)
+XOBJSTUB(PopUpMenuXObj::m_getItem, "")
+XOBJSTUB(PopUpMenuXObj::m_getMenuID, 0)
+XOBJSTUBNR(PopUpMenuXObj::m_setItem)
+XOBJSTUBNR(PopUpMenuXObj::m_setItemMark)
+XOBJSTUBNR(PopUpMenuXObj::m_setItemIcon)
 
 } // End of namespace Director

@@ -221,6 +221,10 @@ bool GobEngine::is800x600() const {
 	return (_features & kFeatures800x600) != 0;
 }
 
+bool GobEngine::is16Colors() const {
+	return (_features & kFeatures16Colors) != 0;
+}
+
 bool GobEngine::isTrueColor() const {
 	return (_features & kFeaturesTrueColor) != 0;
 }
@@ -511,18 +515,6 @@ Common::Error GobEngine::initGameParts() {
 		_resourceSizeWorkaround = true;
 		break;
 
-	case kGameTypeAJWorld:
-		_init     = new Init_v2(this);
-		_video    = new Video_v2(this);
-		_inter    = new Inter_v2(this);
-		_mult     = new Mult_v2(this);
-		_draw     = new Draw_v2(this);
-		_map      = new Map_v2(this);
-		_goblin   = new Goblin_v2(this);
-		_scenery  = new Scenery_v2(this);
-		_saveLoad = new SaveLoad_AJWorld(this, _targetName.c_str());
-		break;
-
 	case kGameTypeGob3:
 		_init     = new Init_v3(this);
 		_video    = new Video_v2(this);
@@ -621,7 +613,6 @@ Common::Error GobEngine::initGameParts() {
 		break;
 
 	case kGameTypeAdibou2:
-	case kGameTypeAdi2:
 	case kGameTypeAdi4:
 		_init     = new Init_v7(this);
 		_video    = new Video_v6(this);
@@ -635,6 +626,7 @@ Common::Error GobEngine::initGameParts() {
 		break;
 
 	case kGameTypeAdibou1:
+	case kGameTypeAdi2:
 		_init     = new Init_v2(this);
 		_video    = new Video_v2(this);
 		_inter    = new Inter_Adibou1(this);

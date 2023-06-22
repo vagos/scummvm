@@ -38,6 +38,7 @@
 #include "engines/nancy/ui/clock.h"
 
 #include "engines/nancy/misc/lightning.h"
+#include "engines/nancy/misc/specialeffect.h"
 
 namespace Common {
 DECLARE_SINGLETON(Nancy::State::Scene);
@@ -56,9 +57,7 @@ void Scene::SceneSummary::read(Common::SeekableReadStream &stream) {
 	ser.syncBytes((byte *)buf, 0x32);
 	description = Common::String(buf);
 
-	ser.syncBytes((byte *)buf, 10);
-	buf[9] = 0;
-	videoFile = Common::String(buf);
+	readFilename(stream, videoFile);
 
 	// skip 2 unknown bytes
 	ser.skip(2);
@@ -66,22 +65,16 @@ void Scene::SceneSummary::read(Common::SeekableReadStream &stream) {
 
 	// Load the palette data in The Vampire Diaries
 	ser.skip(4, kGameTypeVampire, kGameTypeVampire);
-	if (ser.getVersion() == kGameTypeVampire) {
-		palettes.resize(3);
-		readFilename(stream, palettes[0]);
-		readFilename(stream, palettes[1]);
-		readFilename(stream, palettes[2]);
-	}
+	readFilenameArray(ser, palettes, 3, kGameTypeVampire, kGameTypeVampire);
 
-	sound.read(stream, SoundDescription::kScene);
+	sound.readScene(stream);
 
-	ser.skip(6);
 	ser.syncAsUint16LE(panningType);
 	ser.syncAsUint16LE(numberOfVideoFrames);
-	ser.syncAsUint16LE(soundPanPerFrame);
-	ser.syncAsUint16LE(totalViewAngle);
-	ser.syncAsUint16LE(horizontalScrollDelta);
-	ser.syncAsUint16LE(verticalScrollDelta);
+	ser.syncAsUint16LE(soundPanPerFrame, kGameTypeVampire, kGameTypeNancy2);
+	ser.syncAsUint16LE(totalViewAngle, kGameTypeVampire, kGameTypeNancy2);
+	ser.syncAsUint16LE(horizontalScrollDelta, kGameTypeVampire, kGameTypeNancy2); // horizontalScrollDelta
+	ser.syncAsUint16LE(verticalScrollDelta, kGameTypeVampire, kGameTypeNancy2); // verticalScrollDelta
 	ser.syncAsUint16LE(horizontalEdgeSize);
 	ser.syncAsUint16LE(verticalEdgeSize);
 	ser.syncAsUint16LE((uint32 &)slowMoveTimeDelta);
@@ -112,7 +105,7 @@ Scene::Scene() :
 		_clock(nullptr),
 		_actionManager(),
 		_difficulty(0),
-		_activePrimaryVideo(nullptr),
+		_activeConversation(nullptr),
 		_lightning(nullptr) {}
 
 Scene::~Scene()  {
@@ -123,6 +116,8 @@ Scene::~Scene()  {
 	delete _inventoryBoxOrnaments;
 	delete _clock;
 	delete _lightning;
+
+	clearPuzzleData();
 }
 
 void Scene::process() {
@@ -145,7 +140,6 @@ void Scene::process() {
 			g_nancy->_sound->loadSound(_sceneState.summary.sound);
 			g_nancy->_sound->playSound(_sceneState.summary.sound);
 		}
-		run(); // Extra run() call to fix the single frame with a wrong palette in TVD
 		// fall through
 	case kRun:
 		run();
@@ -156,6 +150,11 @@ void Scene::process() {
 void Scene::onStateEnter(const NancyState::NancyState prevState) {
 	if (_state != kInit) {
 		registerGraphics();
+
+		if (prevState != NancyState::kPause) {
+			g_nancy->setTotalPlayTime((uint32)_timers.pushedPlayTime);
+		}
+
 		_actionManager.onPause(false);
 
 		g_nancy->_graphicsManager->redrawAll();
@@ -164,18 +163,16 @@ void Scene::onStateEnter(const NancyState::NancyState prevState) {
 			g_nancy->_cursorManager->setCursorItemID(getHeldItem());
 		}
 
-		// Run once to clear out the previous scene when coming from Map
-		process();
-
-		g_nancy->setTotalPlayTime((uint32)_timers.pushedPlayTime);
-
 		unpauseSceneSpecificSounds();
 		g_nancy->_sound->stopSound("MSND");
 	}
 }
 
 bool Scene::onStateExit(const NancyState::NancyState nextState) {
-	_timers.pushedPlayTime = g_nancy->getTotalPlayTime();
+	if (nextState != NancyState::kPause) {
+		_timers.pushedPlayTime = g_nancy->getTotalPlayTime();
+	}
+	
 	_actionManager.onPause(true);
 	pauseSceneSpecificSounds();
 	_gameStateRequested = NancyState::kNone;
@@ -262,17 +259,26 @@ void Scene::setPlayerTime(Time time, byte relative) {
 }
 
 byte Scene::getPlayerTOD() const {
-	if (_timers.playerTime.getHours() >= 7 && _timers.playerTime.getHours() < 18) {
-		return kPlayerDay;
-	} else if (_timers.playerTime.getHours() >= 19 || _timers.playerTime.getHours() < 6) {
-		return kPlayerNight;
+	if (g_nancy->getGameType() <= kGameTypeNancy1) {
+		if (_timers.playerTime.getHours() >= 7 && _timers.playerTime.getHours() < 18) {
+			return kPlayerDay;
+		} else if (_timers.playerTime.getHours() >= 19 || _timers.playerTime.getHours() < 6) {
+			return kPlayerNight;
+		} else {
+			return kPlayerDuskDawn;
+		}
 	} else {
-		return kPlayerDuskDawn;
+		// nancy2 and up removed dusk/dawn
+		if (_timers.playerTime.getHours() >= 6 && _timers.playerTime.getHours() < 18) {
+			return kPlayerDay;
+		} else {
+			return kPlayerNight;
+		}
 	}
 }
 
 void Scene::addItemToInventory(uint16 id) {
-	_flags.items[id] = kInvHolding;
+	_flags.items[id] = g_nancy->_true;
 	if (_flags.heldItem == id) {
 		setHeldItem(-1);
 	}
@@ -281,7 +287,7 @@ void Scene::addItemToInventory(uint16 id) {
 }
 
 void Scene::removeItemFromInventory(uint16 id, bool pickUp) {
-	_flags.items[id] = kInvEmpty;
+	_flags.items[id] = g_nancy->_false;
 
 	if (pickUp) {
 		setHeldItem(id);
@@ -295,6 +301,11 @@ void Scene::setHeldItem(int16 id)  {
 }
 
 void Scene::setEventFlag(int16 label, byte flag) {
+	if (label >= 1000) {
+		// In nancy3 and onwards flags begin from 1000
+		label -= 1000;
+	}
+
 	if (label > kEvNoEvent && (uint)label < g_nancy->getStaticData().numEventFlags) {
 		_flags.eventFlags[label] = flag;
 	}
@@ -305,6 +316,11 @@ void Scene::setEventFlag(FlagDescription eventFlag) {
 }
 
 bool Scene::getEventFlag(int16 label, byte flag) const {
+	if (label >= 1000) {
+		// In nancy3 and onwards flags begin from 1000
+		label -= 1000;
+	}
+
 	if (label > kEvNoEvent && (uint)label < g_nancy->getStaticData().numEventFlags) {
 		return _flags.eventFlags[label] == flag;
 	} else {
@@ -318,6 +334,10 @@ bool Scene::getEventFlag(FlagDescription eventFlag) const {
 
 void Scene::setLogicCondition(int16 label, byte flag) {
 	if (label > kEvNoEvent) {
+		if (label >= 2000) {
+			// In nancy3 and onwards logic conditions begin from 2000
+			label -= 2000;
+		}
 		_flags.logicConditions[label].flag = flag;
 		_flags.logicConditions[label].timestamp = g_nancy->getTotalPlayTime();
 	}
@@ -333,7 +353,7 @@ bool Scene::getLogicCondition(int16 label, byte flag) const {
 
 void Scene::clearLogicConditions() {
 	for (auto &cond : _flags.logicConditions) {
-		cond.flag = kLogNotUsed;
+		cond.flag = g_nancy->_false;
 		cond.timestamp = 0;
 	}
 }
@@ -445,13 +465,33 @@ void Scene::synchronize(Common::Serializer &ser) {
 	ser.syncAsUint32LE((uint32 &)_timers.pushedPlayTime);
 	ser.syncAsUint32LE((uint32 &)_timers.timerTime);
 	ser.syncAsByte(_timers.timerIsActive);
-	ser.skip(1); // timeOfDay; To be removed on next savefile version bump
+	ser.skip(1, 0, 2);
 
 	g_nancy->setTotalPlayTime((uint32)_timers.lastTotalTime);
 
 	ser.syncArray(_flags.eventFlags.data(), g_nancy->getStaticData().numEventFlags, Common::Serializer::Byte);
 
-	ser.syncArray<uint16>(_flags.sceneHitCount, (uint16)2001, Common::Serializer::Uint16LE);
+	// Skip empty sceneCount array
+	ser.skip(2001 * 2, 0, 2);
+
+	uint numSceneCounts = _flags.sceneCounts.size();
+	ser.syncAsUint16LE(numSceneCounts);
+
+	if (ser.isSaving()) {
+		uint16 key;
+		for (auto &entry : _flags.sceneCounts) {
+			key = entry._key;
+			ser.syncAsUint16LE(key);
+			ser.syncAsUint16LE(entry._value);
+		}
+	} else {
+		uint16 key, val;
+		for (uint i = 0; i < numSceneCounts; ++i) {
+			ser.syncAsUint16LE(key);
+			ser.syncAsUint16LE(val);
+			_flags.sceneCounts.setVal(key, val);
+		}
+	}
 
 	ser.syncAsUint16LE(_difficulty);
 	ser.syncArray<uint16>(_hintsRemaining.data(), _hintsRemaining.size(), Common::Serializer::Uint16LE);
@@ -459,40 +499,47 @@ void Scene::synchronize(Common::Serializer &ser) {
 	ser.syncAsSint16LE(_lastHintCharacter);
 	ser.syncAsSint16LE(_lastHintID);
 
-	// Synchronize SliderPuzzle static data
-	ser.syncAsByte(_sliderPuzzleState.playerHasTriedPuzzle);
+	// Sync game-specific puzzle data
 
-	byte x = 0, y = 0;
-
-	if (ser.isSaving()) {
-		y = _sliderPuzzleState.playerTileOrder.size();
-		if (y) {
-			x = _sliderPuzzleState.playerTileOrder.back().size();
-		} else {
-			x = 0;
+	// Support for older savefiles
+	if (ser.getVersion() < 3 && g_nancy->getGameType() <= kGameTypeNancy1) {
+		PuzzleData *pd = getPuzzleData(SliderPuzzleData::getTag());
+		if (pd) {
+			pd->synchronize(ser);
 		}
+
+		return;
 	}
 
-	ser.syncAsByte(x);
-	ser.syncAsByte(y);
+	byte numPuzzleData = _puzzleData.size();
+	ser.syncAsByte(numPuzzleData);
 
-	_sliderPuzzleState.playerTileOrder.resize(y);
+	if (ser.isSaving()) {
+		for (auto pd : _puzzleData) {
+			uint32 tag = pd._key;
+			ser.syncAsUint32LE(tag);
+			pd._value->synchronize(ser);
+		}
+	} else {
+		clearPuzzleData();
 
-	for (int i = 0; i < y; ++i) {
-		_sliderPuzzleState.playerTileOrder[i].resize(x);
-		ser.syncArray(_sliderPuzzleState.playerTileOrder[i].data(), x, Common::Serializer::Sint16LE);
+		uint32 tag;
+		for (uint i = 0; i < numPuzzleData; ++i) {
+			ser.syncAsUint32LE(tag);
+			PuzzleData *pd = getPuzzleData(tag);
+			if (pd) {
+				pd->synchronize(ser);
+			}
+		}
 	}
 }
 
 void Scene::init() {
-	_flags.eventFlags.resize(g_nancy->getStaticData().numEventFlags, kEvNotOccurred);
+	_flags.eventFlags.resize(g_nancy->getStaticData().numEventFlags, g_nancy->_false);
 
-	// Does this ever get used?
-	for (uint i = 0; i < 2001; ++i) {
-		_flags.sceneHitCount[i] = 0;
-	}
+	_flags.sceneCounts.clear();
 
-	_flags.items.resize(g_nancy->getStaticData().numItems, kInvEmpty);
+	_flags.items.resize(g_nancy->getStaticData().numItems, g_nancy->_false);
 
 	_timers.lastTotalTime = 0;
 	_timers.playerTime = g_nancy->_bootSummary->startTimeHours * 3600000;
@@ -511,8 +558,6 @@ void Scene::init() {
 
 		_lastHintCharacter = _lastHintID = -1;
 	}
-
-	_sliderPuzzleState.playerHasTriedPuzzle = false;
 
 	initStaticData();
 
@@ -535,12 +580,12 @@ void Scene::init() {
 	g_nancy->_graphicsManager->redrawAll();
 }
 
-void Scene::setActivePrimaryVideo(Action::PlayPrimaryVideoChan0 *activeVideo) {
-	_activePrimaryVideo = activeVideo;
+void Scene::setActiveConversation(Action::ConversationSound *activeConversation) {
+	_activeConversation = activeConversation;
 }
 
-Action::PlayPrimaryVideoChan0 *Scene::getActivePrimaryVideo() {
-	return _activePrimaryVideo;
+Action::ConversationSound *Scene::getActiveConversation() {
+	return _activeConversation;
 }
 
 void Scene::beginLightning(int16 distance, uint16 pulseTime, int16 rgbPercent) {
@@ -549,7 +594,32 @@ void Scene::beginLightning(int16 distance, uint16 pulseTime, int16 rgbPercent) {
 	}
 }
 
+void Scene::specialEffect(byte type, uint16 fadeToBlackTime, uint16 frameTime) {
+	_specialEffects.push(Misc::SpecialEffect(type, fadeToBlackTime, frameTime));
+	_specialEffects.back().init();
+}
+
+PuzzleData *Scene::getPuzzleData(const uint32 tag) {
+	// Lazy initialization ensures both init() and synchronize() will not need
+	// to care about which puzzles a specific game has
+
+	if (_puzzleData.contains(tag)) {
+		return _puzzleData[tag];
+	} else {
+		PuzzleData *newData = makePuzzleData(tag);
+		if (newData) {
+			_puzzleData.setVal(tag, newData);
+		}
+		
+		return newData;
+	}
+}
+
 void Scene::load() {
+	if (_specialEffects.size()) {
+		_specialEffects.front().onSceneChange();
+	}
+
 	clearSceneData();
 
 	// Scene IDs are prefixed with S inside the cif tree; e.g 100 -> S100
@@ -621,6 +691,8 @@ void Scene::load() {
 
 	_timers.sceneTime = 0;
 
+	_flags.sceneCounts.getOrCreateVal(_sceneState.currentScene.sceneID)++;
+
 	_state = kStartSound;
 }
 
@@ -632,6 +704,17 @@ void Scene::run() {
 	}
 
 	Time currentPlayTime = g_nancy->getTotalPlayTime();
+
+	if (_specialEffects.size()) {
+		if (_specialEffects.front().isInitialized()) {
+			if (_specialEffects.front().isDone()) {
+				_specialEffects.pop();
+				g_nancy->_graphicsManager->redrawAll();
+			}
+		} else {
+			_specialEffects.front().afterSceneChange();
+		}
+	}
 
 	Time deltaTime = currentPlayTime - _timers.lastTotalTime;
 	_timers.lastTotalTime = currentPlayTime;
@@ -655,13 +738,17 @@ void Scene::run() {
 	if (_lightning) {
 		_lightning->run();
 	}
+
+	if (_state == kLoad) {
+		g_nancy->_graphicsManager->suppressNextDraw();
+	}
 }
 
 void Scene::handleInput() {
 	NancyInput input = g_nancy->_input->getInput();
 
 	// Warp the mouse below the inactive zone during dialogue scenes
-	if (_activePrimaryVideo != nullptr) {
+	if (_activeConversation != nullptr) {
 		const Common::Rect &inactiveZone = g_nancy->_cursorManager->getPrimaryVideoInactiveZone();
 		const Common::Point cursorHotspot = g_nancy->_cursorManager->getCurrentCursorHotspot();
 		Common::Point adjustedMousePos = input.mousePos;
@@ -755,13 +842,13 @@ void Scene::initStaticData() {
 	assert(bsum);
 	
 	if (g_nancy->getGameType() == kGameTypeVampire) {
-		_mapHotspot = bsum->mapButtonHotspot;
+		_mapHotspot = bsum->extraButtonHotspot;
 	} else if (g_nancy->_mapData) {
 		_mapHotspot = g_nancy->_mapData->buttonDest;
 	}
 
-	_menuButton = new UI::Button(5, g_nancy->_graphicsManager->_object0, bsum->menuButtonSrc, bsum->menuButtonDest);
-	_helpButton = new UI::Button(5, g_nancy->_graphicsManager->_object0, bsum->helpButtonSrc, bsum->helpButtonDest);
+	_menuButton = new UI::Button(5, g_nancy->_graphicsManager->_object0, bsum->menuButtonSrc, bsum->menuButtonDest, bsum->menuButtonHighlightSrc);
+	_helpButton = new UI::Button(5, g_nancy->_graphicsManager->_object0, bsum->helpButtonSrc, bsum->helpButtonDest, bsum->helpButtonHighlightSrc);
 	g_nancy->setMouseEnabled(true);
 	
 	// Init ornaments and clock (TVD only)
@@ -779,13 +866,18 @@ void Scene::initStaticData() {
 		_clock->init();
 	}
 
+	if (g_nancy->getGameType() >= kGameTypeNancy2) {
+		_clock = new UI::Clock();
+		_clock->init();
+	}
+
 	_state = kLoad;
 }
 
 void Scene::clearSceneData() {
 	// Clear generic flags only
 	for (uint16 id : g_nancy->getStaticData().genericEventFlags) {
-		_flags.eventFlags[id] = kEvNotOccurred;
+		_flags.eventFlags[id] = g_nancy->_false;
 	}
 
 	clearLogicConditions();
@@ -795,6 +887,16 @@ void Scene::clearSceneData() {
 		_lightning->endLightning();
 	}
 }
+
+void Scene::clearPuzzleData() {
+	for (auto &pd : _puzzleData) {
+		delete pd._value;
+	}
+
+	_puzzleData.clear();
+}
+
+Scene::PlayFlags::LogicCondition::LogicCondition() : flag(g_nancy->_false) {}
 
 } // End of namespace State
 } // End of namespace Nancy

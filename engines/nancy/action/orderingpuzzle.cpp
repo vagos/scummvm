@@ -101,19 +101,13 @@ void OrderingPuzzle::readData(Common::SeekableReadStream &stream) {
 	ser.skip(15 - _sequenceLength, kGameTypeNancy1);
 
 	if (ser.getVersion() != kGameTypeVampire) {
-		_clickSound.read(stream, SoundDescription::kNormal);
+		_clickSound.readNormal(stream);
 	}
 
 	_solveExitScene.readData(stream, ser.getVersion() == kGameTypeVampire);
-	ser.skip(2); // shouldStopRendering, useless
-	ser.syncAsUint16LE(_flagOnSolve.label);
-	ser.syncAsByte(_flagOnSolve.flag);
 	ser.syncAsUint16LE(_solveSoundDelay);
-	_solveSound.read(stream, SoundDescription::kNormal);
+	_solveSound.readNormal(stream);
 	_exitScene.readData(stream, ser.getVersion() == kGameTypeVampire);
-	stream.skip(2); // shouldStopRendering, useless
-	_flagOnExit.label = stream.readSint16LE();
-	_flagOnExit.flag = stream.readByte();
 	readRect(stream, _exitHotspot);
 }
 
@@ -131,13 +125,14 @@ void OrderingPuzzle::execute() {
 	case kRun:
 		switch (_solveState) {
 		case kNotSolved:
-			if (_clickedSequence.size() != _sequenceLength) {
+			if (_clickedSequence.size() <  _sequenceLength) {
 				return;
 			}
 
 			for (uint i = 0; i < _sequenceLength; ++i) {
+
 				if (_clickedSequence[i] != (int16)_correctSequence[i]) {
-					if (_clickedSequence.size() > (uint)_sequenceLength + ((g_nancy->getGameType() == kGameTypeVampire) ? -1 : 1)) {
+					if (_clickedSequence.size() > (g_nancy->getGameType() == kGameTypeVampire ? 4 : (uint)_sequenceLength + 1)) {
 						clearAllElements();
 					}
 
@@ -145,7 +140,7 @@ void OrderingPuzzle::execute() {
 				}
 			}
 
-			NancySceneState.setEventFlag(_flagOnSolve);
+			NancySceneState.setEventFlag(_solveExitScene._flag);
 			_solveSoundPlayTime = g_nancy->getTotalPlayTime() + _solveSoundDelay * 1000;
 			_solveState = kPlaySound;
 			// fall through
@@ -174,10 +169,9 @@ void OrderingPuzzle::execute() {
 		g_nancy->_sound->stopSound(_solveSound);
 
 		if (_solveState == kNotSolved) {
-			NancySceneState.changeScene(_exitScene);
-			NancySceneState.setEventFlag(_flagOnExit);
+			_exitScene.execute();
 		} else {
-			NancySceneState.changeScene(_solveExitScene);
+			NancySceneState.changeScene(_solveExitScene._sceneChange);
 		}
 
 		finishExecution();
@@ -226,12 +220,6 @@ void OrderingPuzzle::handleInput(NancyInput &input) {
 			}
 			return;
 		}
-	}
-}
-
-void OrderingPuzzle::onPause(bool pause) {
-	if (!pause) {
-		registerGraphics();
 	}
 }
 

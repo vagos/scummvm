@@ -20,119 +20,150 @@
  */
 
 #include "engines/nancy/action/recordtypes.h"
-#include "engines/nancy/action/primaryvideo.h"
+#include "engines/nancy/action/conversation.h"
 #include "engines/nancy/action/secondaryvideo.h"
 #include "engines/nancy/action/secondarymovie.h"
-#include "engines/nancy/action/staticbitmapanim.h"
+#include "engines/nancy/action/overlay.h"
 #include "engines/nancy/action/orderingpuzzle.h"
 #include "engines/nancy/action/rotatinglockpuzzle.h"
 #include "engines/nancy/action/telephone.h"
 #include "engines/nancy/action/sliderpuzzle.h"
 #include "engines/nancy/action/passwordpuzzle.h"
 #include "engines/nancy/action/leverpuzzle.h"
+#include "engines/nancy/action/rippedletterpuzzle.h"
+#include "engines/nancy/action/towerpuzzle.h"
+#include "engines/nancy/action/riddlepuzzle.h"
+#include "engines/nancy/action/overridelockpuzzle.h"
+#include "engines/nancy/action/bombpuzzle.h"
 
 #include "engines/nancy/state/scene.h"
+
+#include "engines/nancy/nancy.h"
 
 namespace Nancy {
 namespace Action {
 
 ActionRecord *ActionManager::createActionRecord(uint16 type) {
-	type -= 0xA;
 	switch (type) {
-	case 0x00:
+	case 10:
 		return new Hot1FrSceneChange();
-	case 0x01:
+	case 11:
 		return new HotMultiframeSceneChange();
-	case 0x02:
+	case 12:
 		return new SceneChange();
-	case 0x03:
+	case 13:
 		return new HotMultiframeMultisceneChange();
-	case 0x04:
+	case 14:
 		return new Hot1FrExitSceneChange();
-	case 0x0A:
+	case 20:
 		return new PaletteThisScene();
-	case 0x0B:
+	case 21:
 		return new PaletteNextScene();
-	case 0x1E:
-		return new LightningOn();
-	case 0x28:
-		return new PlayPrimaryVideoChan0();
-	case 0x29:
+	case 40:
+		if (g_nancy->getGameType() < kGameTypeNancy2) {
+			// Only used in TVD
+			return new LightningOn();
+		} else {
+			return new SpecialEffect();
+		}		
+	case 50:
+		return new ConversationVideo(); // PlayPrimaryVideoChan0
+	case 51:
 		return new PlaySecondaryVideo(0);
-	case 0x2A:
+	case 52:
 		return new PlaySecondaryVideo(1);
-	case 0x2B:
+	case 53:
 		return new PlaySecondaryMovie();
-	case 0x2C:
-		return new PlayStaticBitmapAnimation(false); // PlayStaticBitmapAnimation
-	case 0x2D:
-		return new PlayStaticBitmapAnimation(true); // PlayIntStaticBitmapAnimation
-	case 0x32:
+	case 54:
+		return new Overlay(false); // PlayStaticBitmapAnimation
+	case 55:
+		return new Overlay(true); // PlayIntStaticBitmapAnimation
+	case 56:
+		return new ConversationVideo();
+	case 57:
+		return new ConversationCel();
+	case 58:
+		return new ConversationSound();
+	case 60:
 		return new MapCall();
-	case 0x33:
+	case 61:
 		return new MapCallHot1Fr();
-	case 0x34:
+	case 62:
 		return new MapCallHotMultiframe();
-	case 0x41:
+	case 75:
 		return new TextBoxWrite();
-	case 0x42:
+	case 76:
 		return new TextBoxClear();
-	case 0x5A:
+	case 100:
 		return new BumpPlayerClock();
-	case 0x5B:
+	case 101:
 		return new SaveContinueGame();
-	case 0x5C:
+	case 102:
 		return new TurnOffMainRendering();
-	case 0x5D:
+	case 103:
 		return new TurnOnMainRendering();
-	case 0x5E:
+	case 104:
 		return new ResetAndStartTimer();
-	case 0x5F:
+	case 105:
 		return new StopTimer();
-	case 0x60:
+	case 106:
 		return new EventFlagsMultiHS();
-	case 0x61:
+	case 107:
 		return new EventFlags();
-	case 0x62:
+	case 108:
 		return new OrderingPuzzle();
-	case 0x63:
+	case 109:
 		return new LoseGame();
-	case 0x64:
+	case 110:
 		return new PushScene();
-	case 0x65:
+	case 111:
 		return new PopScene();
-	case 0x66:
+	case 112:
 		return new WinGame();
-	case 0x67:
+	case 113:
 		return new DifficultyLevel();
-	case 0x68:
+	case 114:
 		return new RotatingLockPuzzle();
-	case 0x69:
+	case 115:
 		return new LeverPuzzle();
-	case 0x6A:
+	case 116:
 		return new Telephone();
-	case 0x6B:
+	case 117:
 		return new SliderPuzzle();
-	case 0x6C:
+	case 118:
 		return new PasswordPuzzle();
-	case 0x6E:
+	case 120:
 		return new AddInventoryNoHS();
-	case 0x6F:
+	case 121:
 		return new RemoveInventoryNoHS();
-	case 0x70:
+	case 122:
 		return new ShowInventoryItem();
-	case 0x8C:
+	case 150:
 		return new PlayDigiSoundAndDie();
-	case 0x8D:
+	case 151:
 		return new PlayDigiSoundAndDie();
-	case 0x8E:
+	case 152:
 		return new PlaySoundPanFrameAnchorAndDie();
-	case 0x8F:
+	case 153:
 		return new PlaySoundMultiHS();
-	case 0x96:
+	case 154:
+		return new StopSound();
+	case 155:
+		return new StopSound(); // StopAndUnloadSound, but we always unload
+	case 160:
 		return new HintSystem();
+	case 201:
+		return new TowerPuzzle();
+	case 202:
+		return new BombPuzzle();
+	case 203:
+		return new RippedLetterPuzzle();
+	case 204:
+		return new OverrideLockPuzzle();
+	case 205:
+		return new RiddlePuzzle();
 	default:
-		error("Action Record type %i is invalid!", type+0xA);
+		error("Action Record type %i is invalid!", type);
 		return nullptr;
 	}
 }

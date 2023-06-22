@@ -230,6 +230,7 @@ struct BuildSetup {
 	std::string srcDir;     ///< Path to the sources.
 	std::string filePrefix; ///< Prefix for the relative path arguments in the project files.
 	std::string outputDir;  ///< Path where to put the MSVC project files.
+	std::string libsDir;    ///< Path to libraries for MSVC builds.  If absent, use LIBS_DEFINE environment var instead.
 
 	StringList includeDirs; ///< List of additional include paths
 	StringList libraryDirs; ///< List of additional library paths
@@ -245,9 +246,10 @@ struct BuildSetup {
 	bool runBuildEvents;       ///< Run build events as part of the build (generate revision number and copy engine/theme data & needed files to the build folder
 	bool createInstaller;      ///< Create installer after the build
 	bool useSDL2;              ///< Whether to use SDL2 or not.
-	bool useCanonicalLibNames; ///< Whether to use canonical libraries names or default ones
 	bool useStaticDetection;   ///< Whether to link detection features inside the executable or not.
 	bool useWindowsUnicode;    ///< Whether to use Windows Unicode APIs or ANSI APIs.
+	bool useXCFramework;       ///< Whether to use Apple XCFrameworks instead of static libraries
+	bool useVcpkg;             ///< Whether to load libraries from vcpkg or SCUMMVM_LIBS
 
 	BuildSetup() {
 		devTools = false;
@@ -255,9 +257,10 @@ struct BuildSetup {
 		runBuildEvents = false;
 		createInstaller = false;
 		useSDL2 = true;
-		useCanonicalLibNames = false;
 		useStaticDetection = true;
 		useWindowsUnicode = true;
+		useXCFramework = false;
+		useVcpkg = false;
 	}
 
 	bool featureEnabled(std::string feature) const;

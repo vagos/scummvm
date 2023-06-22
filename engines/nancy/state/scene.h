@@ -23,8 +23,10 @@
 #define NANCY_STATE_SCENE_H
 
 #include "common/singleton.h"
+#include "common/queue.h"
 
 #include "engines/nancy/commontypes.h"
+#include "engines/nancy/puzzledata.h"
 
 #include "engines/nancy/action/actionmanager.h"
 
@@ -47,12 +49,12 @@ class NancyConsole;
 struct SceneChangeDescription;
 
 namespace Action {
-class SliderPuzzle;
-class PlayPrimaryVideoChan0;
+class ConversationSound;
 }
 
 namespace Misc {
 class Lightning;
+class SpecialEffect;
 }
 
 namespace UI {
@@ -76,7 +78,6 @@ struct SceneInfo {
 class Scene : public State, public Common::Singleton<Scene> {
 	friend class Nancy::Action::ActionRecord;
 	friend class Nancy::Action::ActionManager;
-	friend class Nancy::Action::SliderPuzzle;
 	friend class Nancy::NancyConsole;
 	friend class Nancy::NancyEngine;
 
@@ -133,6 +134,7 @@ public:
 
 	void setPlayerTime(Time time, byte relative);
 	Time getPlayerTime() const { return _timers.playerTime; }
+	Time getTimerTime() const { return _timers.timerIsActive ? _timers.timerTime : 0; }
 	byte getPlayerTOD() const;
 
 	void addItemToInventory(uint16 id);
@@ -141,13 +143,13 @@ public:
 	void setHeldItem(int16 id);
 	byte hasItem(int16 id) const { return _flags.items[id]; }
 
-	void setEventFlag(int16 label, byte flag = kEvOccurred);
+	void setEventFlag(int16 label, byte flag);
 	void setEventFlag(FlagDescription eventFlag);
-	bool getEventFlag(int16 label, byte flag = kEvOccurred) const;
+	bool getEventFlag(int16 label, byte flag) const;
 	bool getEventFlag(FlagDescription eventFlag) const;
 
-	void setLogicCondition(int16 label, byte flag = kLogUsed);
-	bool getLogicCondition(int16 label, byte flag = kLogUsed) const;
+	void setLogicCondition(int16 label, byte flag);
+	bool getLogicCondition(int16 label, byte flag) const;
 	void clearLogicConditions();
 
 	void setDifficulty(uint difficulty) { _difficulty = difficulty; }
@@ -181,11 +183,17 @@ public:
 	SceneInfo &getNextSceneInfo() { return _sceneState.nextScene; }
 	const SceneSummary &getSceneSummary() const { return _sceneState.summary; }
 
-	void setActivePrimaryVideo(Action::PlayPrimaryVideoChan0 *activeVideo);
-	Action::PlayPrimaryVideoChan0 *getActivePrimaryVideo();
+	void setActiveConversation(Action::ConversationSound *activeConversation);
+	Action::ConversationSound *getActiveConversation();
 
 	// The Vampire Diaries only;
 	void beginLightning(int16 distance, uint16 pulseTime, int16 rgbPercent);
+
+	// Used from nancy2 onwards
+	void specialEffect(byte type, uint16 fadeToBlackTime, uint16 frameTime);
+
+	// Get the persistent data for a given puzzle type
+	PuzzleData *getPuzzleData(const uint32 tag);
 
 private:
 	void init();
@@ -196,6 +204,7 @@ private:
 	void initStaticData();
 
 	void clearSceneData();
+	void clearPuzzleData();
 
 	enum State {
 		kInit,
@@ -226,21 +235,17 @@ private:
 
 	struct PlayFlags {
 		struct LogicCondition {
-			byte flag = kLogNotUsed;
+			LogicCondition();
+			byte flag;
 			Time timestamp;
 		};
 
 		LogicCondition logicConditions[30];
 		Common::Array<byte> eventFlags;
-		uint16 sceneHitCount[2001];
+		Common::HashMap<uint16, uint16> sceneCounts;
 		Common::Array<byte> items;
 		int16 heldItem = -1;
 		int16 primaryVideoResponsePicked = -1;
-	};
-
-	struct SliderPuzzleState {
-		Common::Array<Common::Array<int16>> playerTileOrder;
-		bool playerHasTriedPuzzle;
 	};
 
 	// UI
@@ -258,11 +263,12 @@ private:
 	UI::InventoryBoxOrnaments *_inventoryBoxOrnaments;
 	UI::Clock *_clock;
 
-	// Data
+	Common::Rect _mapHotspot;
+
+	// General data
 	SceneState _sceneState;
 	PlayFlags _flags;
 	Timers _timers;
-	SliderPuzzleState _sliderPuzzleState;
 	uint16 _difficulty;
 	Common::Array<uint16> _hintsRemaining;
 	int16 _lastHintCharacter;
@@ -270,11 +276,12 @@ private:
 	NancyState::NancyState _gameStateRequested;
 
 	Misc::Lightning *_lightning;
+	Common::Queue<Misc::SpecialEffect> _specialEffects;
 
-	Common::Rect _mapHotspot;
+	Common::HashMap<uint32, PuzzleData *> _puzzleData;
 
 	Action::ActionManager _actionManager;
-	Action::PlayPrimaryVideoChan0 *_activePrimaryVideo;
+	Action::ConversationSound *_activeConversation;
 
 	State _state;
 

@@ -34,27 +34,34 @@
 
 namespace Tetraedge {
 
-Inventory::Inventory() : _cellphone(nullptr), _selectedObject(nullptr) {
+Inventory::Inventory() : _cellphone(nullptr), _selectedObject(nullptr), _currentPage(0) {
 }
 
 Inventory::~Inventory() {
-	if (_cellphone)
+	if (_cellphone) {
 		_cellphone->unload();
-	delete _cellphone;
+		delete _cellphone;
+	}
 }
 
 void Inventory::enter() {
 	setVisible(true);
-	Game *game = g_engine->getGame();
-	Character *character = game->scene()._character;
-	character->stop();
-	character->setAnimation(character->characterSettings()._idleAnimFileName, true);
-	_gui.layoutChecked("textObject")->setVisible(false);
-
-	if (!game->_firstInventory) {
-		_gui.buttonLayoutChecked("Aide")->setVisible(false);
+	
+	if (g_engine->gameIsAmerzone()) {
+		currentPage(_currentPage);
 	} else {
-		game->_firstInventory = false;
+		Game *game = g_engine->getGame();
+		Character *character = game->scene()._character;
+		character->stop();
+		character->setAnimation(character->characterSettings()._idleAnimFileName, true);
+
+		_gui.layoutChecked("textObject")->setVisible(false);
+
+		if (!game->_firstInventory && !g_engine->gameIsAmerzone()) {
+			_gui.buttonLayoutChecked("Aide")->setVisible(false);
+		} else {
+			game->_firstInventory = false;
+		}
 	}
 
 	if (_selectedObject)
@@ -71,39 +78,52 @@ void Inventory::leave() {
 }
 
 void Inventory::load() {
-	setName("inventory");
+	setName("_inventory");
 	setSizeType(RELATIVE_TO_PARENT);
 	setSize(TeVector3f32(1.0f, 1.0f, userSize().z()));
 	_gui.load("Inventory/Inventory.lua");
 	TeLayout *invlayout = _gui.layoutChecked("inventory");
 	addChild(invlayout);
 
-	TeButtonLayout *btn;
-	btn = _gui.buttonLayoutChecked("cellphone");
-	btn->onMouseClickValidated().add(this, &Inventory::onVisibleCellphone);
+	if (g_engine->gameIsAmerzone()) {
+		TeLayout *bglayout = _gui.layoutChecked("background");
+		bglayout->setRatioMode(RATIO_MODE_NONE);
 
-	btn = _gui.buttonLayoutChecked("prendre");
-	btn->setVisible(false);
-	btn->onMouseClickValidated().add(this, &Inventory::onTakeObjectSelected);
+		TeButtonLayout *btn;
+		btn = _gui.buttonLayoutChecked("previousPage");
+		btn->onMouseClickValidated().add(this, &Inventory::onPreviousPage);
+	
+		btn = _gui.buttonLayoutChecked("nextPage");
+		btn->onMouseClickValidated().add(this, &Inventory::onNextPage);
+	} else {
+		TeButtonLayout *btn;
+		btn = _gui.buttonLayoutChecked("cellphone");
+		btn->onMouseClickValidated().add(this, &Inventory::onVisibleCellphone);
 
-	btn = _gui.buttonLayoutChecked("lire");
-	btn->setEnable(false);
-	btn->onMouseClickValidated().add(this, &Inventory::onZoomed);
+		btn = _gui.buttonLayoutChecked("prendre");
+		btn->setVisible(false);
+		btn->onMouseClickValidated().add(this, &Inventory::onTakeObjectSelected);
 
-	btn = _gui.buttonLayoutChecked("quitButton");
-	btn->setVisible(true);
-	btn->onMouseClickValidated().add(this, &Inventory::onQuitButton);
+		btn = _gui.buttonLayoutChecked("lire");
+		btn->setEnable(false);
+		btn->onMouseClickValidated().add(this, &Inventory::onZoomed);
 
-	btn = _gui.buttonLayoutChecked("quitBackground");
-	btn->setVisible(true);
-	btn->onMouseClickValidated().add(this, &Inventory::onQuitButton);
+		btn = _gui.buttonLayoutChecked("quitButton");
+		btn->setVisible(true);
+		btn->onMouseClickValidated().add(this, &Inventory::onQuitButton);
 
-	btn = _gui.buttonLayoutChecked("mainMenuButton");
-	btn->setVisible(true);
-	btn->onMouseClickValidated().add(this, &Inventory::onMainMenuButton);
+		btn = _gui.buttonLayoutChecked("quitBackground");
+		btn->setVisible(true);
+		btn->onMouseClickValidated().add(this, &Inventory::onQuitButton);
 
+		btn = _gui.buttonLayoutChecked("mainMenuButton");
+		btn->setVisible(true);
+		btn->onMouseClickValidated().add(this, &Inventory::onMainMenuButton);
+
+		loadCellphone();
+	}
+	_currentPage = 0;
 	_selectedObject = nullptr;
-	loadCellphone();
 
 	const Common::Path objectsPathPrefix("Inventory/Objects/Objects_");
 	const Common::String &lang = g_engine->getCore()->language();
@@ -120,7 +140,7 @@ void Inventory::load() {
 
 	loadXMLFile(langXmlPath);
 
-	TeLayout *layout = _gui.layout("selectionSprite");
+	TeLayout *layout = _gui.layoutChecked("selectionSprite");
 	layout->setVisible(false);
 	_invObjects.clear();
 
@@ -242,18 +262,21 @@ bool Inventory::addObject(InventoryObject *obj) {
 				break;
 			}
 
-			TeTextLayout *newText = new TeTextLayout();
-			newText->setSizeType(CoordinatesType::RELATIVE_TO_PARENT);
-			newText->setPosition(TeVector3f32(1.0, 1.0, 0.0));
-			newText->setSize(TeVector3f32(1.0, 1.0, 0.0));
-			newText->setTextSizeType(1);
-			newText->setTextSizeProportionalToWidth(200);
-			newText->setText(_gui.value("textAttributs").toString() + objectName((*invObjIter)->name()));
-			newText->setName((*invObjIter)->name());
-			newText->setVisible(false);
+			if (!g_engine->gameIsAmerzone()) {
+				TeTextLayout *newText = new TeTextLayout();
+				newText->setSizeType(CoordinatesType::RELATIVE_TO_PARENT);
+				newText->setPosition(TeVector3f32(1.0, 1.0, 0.0));
+				newText->setSize(TeVector3f32(1.0, 1.0, 0.0));
+				newText->setTextSizeType(1);
+				newText->setTextSizeProportionalToWidth(200);
+				newText->setText(_gui.value("textAttributs").toString() + objectName((*invObjIter)->name()));
+				newText->setName((*invObjIter)->name());
+				newText->setVisible(false);
 
-			TeLayout *layout = _gui.layout("textObject");
-			layout->addChild(newText);
+				TeLayout *layout = _gui.layout("textObject");
+				layout->addChild(newText);
+			}
+
 			slot->addChild(*invObjIter);
 
 			totalSlots++;
@@ -290,6 +313,35 @@ Common::String Inventory::objectName(const Common::String &objId) {
 	return _objectData.getVal(objId)._name;
 }
 
+void Inventory::currentPage(uint page) {
+	TeLayout *pageLayout = _gui.layout(Common::String::format("page%d", page));
+	if (pageLayout) {
+		_currentPage = page;
+		uint p = 0;
+		while (true) {
+			pageLayout = _gui.layout(Common::String::format("page%d", p));
+			if (!pageLayout)
+				break;
+			pageLayout->setVisible(p == _currentPage);
+			TeButtonLayout *diodeLayout = _gui.buttonLayoutChecked(Common::String::format("diode%d", p));
+			diodeLayout->setEnable(p != _currentPage);
+			p++;
+		}
+		if (_selectedObject)
+			selectedObject(_selectedObject);
+	}
+}
+
+bool Inventory::onPreviousPage() {
+	currentPage(_currentPage - 1);
+	return false;
+}
+
+bool Inventory::onNextPage() {
+	currentPage(_currentPage + 1);
+	return false;
+}
+
 bool Inventory::onMainMenuButton() {
 	leave();
 	Game *game = g_engine->getGame();
@@ -302,7 +354,8 @@ bool Inventory::onMainMenuButton() {
 bool Inventory::onObjectSelected(InventoryObject &obj) {
 	selectedObject(&obj);
 	if (_selectedTimer.running()) {
-		if (_selectedTimer.timeElapsed() < 300000)
+		uint64 timeout = g_engine->gameIsAmerzone() ? 250000 : 300000;
+		if (_selectedTimer.timeElapsed() < timeout)
 			g_engine->getGame()->inventoryMenu().leave();
 	} else {
 		_selectedTimer.start();
@@ -440,13 +493,18 @@ void Inventory::selectedObject(const Common::String &objname) {
 void Inventory::selectedObject(InventoryObject *obj) {
 	Game *game = g_engine->getGame();
 	game->setCurrentObjectSprite("");
-	_gui.layoutChecked("prendre")->setVisible(false);
-	_gui.layoutChecked("textObject")->setVisible(false);
+
+	if (!g_engine->gameIsAmerzone()) {
+		_gui.layoutChecked("prendre")->setVisible(false);
+		_gui.layoutChecked("textObject")->setVisible(false);
+	}
 	_selectedObject = obj;
 	if (!obj) {
 		_gui.spriteLayoutChecked("selectionSprite")->setVisible(false);
-		_gui.textLayout("text")->setText("");
-		game->inGameGui().spriteLayoutChecked("selectedObject")->unload();
+		if (!g_engine->gameIsAmerzone()) {
+			_gui.textLayout("text")->setText("");
+			game->inGameGui().spriteLayoutChecked("selectedObject")->unload();
+		}
 	} else {
 		TeSpriteLayout *selection = _gui.spriteLayoutChecked("selectionSprite");
 		selection->setVisible(obj->worldVisible());
@@ -456,25 +514,30 @@ void Inventory::selectedObject(InventoryObject *obj) {
 		TeVector3f32 pos = parentLayout->position();
 		pos.z() = selection->position().z();
 		selection->setPosition(pos);
-		const Common::String &objId = obj->name();
-		static const char *textStyle = "<section style=\"center\" /><color r=\"200\" g=\"200\" b=\"200\"/><font file=\"Common/Fonts/Colaborate-Regular.otf\" size=\"24\" />";
-		Common::String text = Common::String::format("%s%s<br/>%s", textStyle,
-					objectName(objId).c_str(),
-					objectDescription(objId).c_str());
-		_gui.textLayout("text")->setText(text);
-		_gui.buttonLayoutChecked("lire")->setEnable(isDocument(objId));
+
 		const Common::String spritePathStr = obj->spritePath();
 		game->setCurrentObjectSprite(spritePathStr);
-		TeLayout *textObj = _gui.layout("textObject");
-		for (int i = 0; i < textObj->childCount(); i++) {
-			if (textObj->child(i)->name() == obj->name()) {
-				textObj->setVisible(true);
-				textObj->child(i)->setVisible(true);
-			} else {
-				textObj->child(i)->setVisible(false);
+
+		if (!g_engine->gameIsAmerzone()) {
+			const Common::String &objId = obj->name();
+			static const char *textStyle = "<section style=\"center\" /><color r=\"200\" g=\"200\" b=\"200\"/><font file=\"Common/Fonts/Colaborate-Regular.otf\" size=\"24\" />";
+			Common::String text = Common::String::format("%s%s<br/>%s", textStyle,
+						objectName(objId).c_str(),
+						objectDescription(objId).c_str());
+			_gui.textLayout("text")->setText(text);
+
+			_gui.buttonLayoutChecked("lire")->setEnable(isDocument(objId));
+			TeLayout *textObj = _gui.layout("textObject");
+			for (int i = 0; i < textObj->childCount(); i++) {
+				if (textObj->child(i)->name() == obj->name()) {
+					textObj->setVisible(true);
+					textObj->child(i)->setVisible(true);
+				} else {
+					textObj->child(i)->setVisible(false);
+				}
 			}
+			game->inGameGui().spriteLayoutChecked("selectedObject")->load(spritePathStr);
 		}
-		game->inGameGui().spriteLayoutChecked("selectedObject")->load(spritePathStr);
 	}
 }
 

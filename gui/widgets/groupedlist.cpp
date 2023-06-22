@@ -23,6 +23,7 @@
 #include "common/frac.h"
 #include "common/tokenizer.h"
 #include "common/translation.h"
+#include "common/config-manager.h"
 
 #include "gui/widgets/groupedlist.h"
 #include "gui/widgets/scrollbar.h"
@@ -114,7 +115,6 @@ void GroupedListWidget::sortGroups() {
 
 	);
 
-	uint curListSize = 0;
 	for (uint i = 0; i != _groupHeaders.size(); ++i) {
 		Common::U32String header = _groupHeaders[i];
 		Common::U32String displayedHeader;
@@ -131,14 +131,12 @@ void GroupedListWidget::sortGroups() {
 			displayedHeader.toUppercase();
 
 			_list.push_back(_groupHeaderPrefix + displayedHeader + _groupHeaderSuffix);
-			++curListSize;
 		}
 
 		if (_groupExpanded[groupID]) {
 			for (int *k = _itemsInGroup[groupID].begin(); k != _itemsInGroup[groupID].end(); ++k) {
 				_list.push_back(Common::U32String(_groupsVisible ? "    " : "") + _dataList[*k].orig);
 				_listIndex.push_back(*k);
-				++curListSize;
 			}
 		}
 	}
@@ -153,6 +151,42 @@ void GroupedListWidget::sortGroups() {
 	} else {
 		markAsDirty();
 	}
+}
+
+void GroupedListWidget::loadClosedGroups(const Common::U32String &groupName) {
+	// Recalls what groups were closed from the config
+	if (ConfMan.hasKey("group_" + groupName, ConfMan.kApplicationDomain)) {
+		const Common::String &val = ConfMan.get("group_" + groupName, ConfMan.kApplicationDomain);
+		Common::StringTokenizer hiddenGroups(val);
+
+		for (Common::String tok = hiddenGroups.nextToken(); tok.size(); tok = hiddenGroups.nextToken()) {
+			// See if the hidden group is in our group headers still, if so, hide it
+			for (Common::U32StringArray::size_type i = 0; i < _groupHeaders.size(); ++i) {
+				if (_groupHeaders[i] == tok || (tok == "unnamed" && _groupHeaders[i].size() == 0)) {
+					_groupExpanded[i] = false;
+					break;
+				}
+			}
+		}
+		sortGroups();
+	}
+}
+
+void GroupedListWidget::saveClosedGroups(const Common::U32String &groupName) {
+	// Save the hidden groups to the config
+	Common::String hiddenGroups;
+	for (Common::U32StringArray::size_type i = 0; i < _groupHeaders.size(); ++i) {
+		if (!_groupExpanded[i]) {
+			if (_groupHeaders[i].size()) {
+				hiddenGroups += _groupHeaders[i];
+			} else {
+				hiddenGroups += "unnamed";
+			}
+			hiddenGroups += ' ';
+		}
+	}
+	ConfMan.set("group_" + groupName, hiddenGroups, ConfMan.kApplicationDomain);
+	ConfMan.flushToDisk();
 }
 
 void GroupedListWidget::setSelected(int item) {

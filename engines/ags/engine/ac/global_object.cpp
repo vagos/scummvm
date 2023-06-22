@@ -216,24 +216,21 @@ int GetObjectBaseline(int obn) {
 }
 
 void AnimateObjectImpl(int obn, int loopn, int spdd, int rept, int direction, int blocking, int sframe, int volume) {
-	if (obn >= MANOBJNUM) {
-		scAnimateCharacter(obn - 100, loopn, spdd, rept);
-		return;
-	}
 	if (!is_valid_object(obn))
 		quit("!AnimateObject: invalid object number specified");
 	if (_G(objs)[obn].view == RoomObject::NoView)
 		quit("!AnimateObject: object has not been assigned a view");
 	if (loopn < 0 || loopn >= _GP(views)[_G(objs)[obn].view].numLoops)
 		quit("!AnimateObject: invalid loop number specified");
-	if (sframe < 0 || sframe >= _GP(views)[_G(objs)[obn].view].loops[loopn].numFrames)
-		quit("!AnimateObject: invalid starting frame number specified");
-	if ((direction < 0) || (direction > 1))
-		quit("!AnimateObjectEx: invalid direction");
-	if ((rept < 0) || (rept > 2))
-		quit("!AnimateObjectEx: invalid repeat value");
 	if (_GP(views)[_G(objs)[obn].view].loops[loopn].numFrames < 1)
 		quit("!AnimateObject: no frames in the specified view loop");
+	if (sframe < 0 || sframe >= _GP(views)[_G(objs)[obn].view].loops[loopn].numFrames)
+		quit("!AnimateObject: invalid starting frame number specified");
+
+	if ((direction < 0) || (direction > 1))
+		quit("!AnimateObjectEx: invalid direction");
+	if (((rept + 1) < ANIM_ONCE) || ((rept + 1) > ANIM_ONCERESET)) // will convert to 1-based repeat below
+		quit("!AnimateObjectEx: invalid repeat value");
 
 	// reverse animation starts at the *previous frame*
 	if (direction) {
@@ -266,12 +263,23 @@ void AnimateObjectImpl(int obn, int loopn, int spdd, int rept, int direction, in
 		GameLoopUntilValueIsZero(&_G(objs)[obn].cycling);
 }
 
+// A legacy variant of AnimateObject implementation: for pre-2.72 scripts;
+// it has a quirk: for IDs >= 100 this actually calls AnimateCharacter(ID - 100)
+static void LegacyAnimateObjectImpl(int obn, int loopn, int spdd, int rept,
+									int direction = 0, int blocking = 0) {
+	if (obn >= LEGACY_ANIMATE_CHARIDBASE) {
+		scAnimateCharacter(obn - LEGACY_ANIMATE_CHARIDBASE, loopn, spdd, rept);
+	} else {
+		AnimateObjectImpl(obn, loopn, spdd, rept, direction, blocking, 0, 100 /* full volume */);
+	}
+}
+
 void AnimateObjectEx(int obn, int loopn, int spdd, int rept, int direction, int blocking) {
-	AnimateObjectImpl(obn, loopn, spdd, rept, direction, blocking, 0);
+	LegacyAnimateObjectImpl(obn, loopn, spdd, rept, direction, blocking);
 }
 
 void AnimateObject(int obn, int loopn, int spdd, int rept) {
-	AnimateObjectImpl(obn, loopn, spdd, rept, 0, 0, 0);
+	LegacyAnimateObjectImpl(obn, loopn, spdd, rept, 0, 0);
 }
 
 void MergeObject(int obn) {
@@ -450,7 +458,7 @@ void RunObjectInteraction(int aa, int mood) {
 }
 
 int AreObjectsColliding(int obj1, int obj2) {
-	if ((!is_valid_object(obj1)) | (!is_valid_object(obj2)))
+	if ((!is_valid_object(obj1)) || (!is_valid_object(obj2)))
 		quit("!AreObjectsColliding: invalid object specified");
 
 	return (AreThingsOverlapping(obj1 + OVERLAPPING_OBJECT, obj2 + OVERLAPPING_OBJECT)) ? 1 : 0;

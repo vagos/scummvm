@@ -5,7 +5,11 @@ For a more comprehensive changelog of the latest experimental code, see:
 
  New games:
    - Added support for macOS versions of Syberia and Syberia II.
-   - Added support for The Vampire Diaries and Nancy Drew: Secrets Can Kill
+   - Added support for The Vampire Diaries and Nancy Drew: Secrets Can Kill.
+   - Added support for Reah: Face the Unknown and Schizm: Mysterious Journey.
+   - Added support for Might and Magic Book One.
+   - Added support for Muppet Treasure Island.
+   - Added support for Primordia, Shardlight and Technobabylon.
 
  New platforms:
    - Added libretro new shiny port.
@@ -14,6 +18,10 @@ For a more comprehensive changelog of the latest experimental code, see:
  General:
   - Added optional dependency for libvpx.
   - Added optional dependency for libmikmod.
+  - Added support for PC98 font ROM.
+
+ AGS:
+   - Synced with upstream AGS 3.6.0.48.
 
  Asylum:
    - Added support for Chinese Sanitarium.
@@ -29,6 +37,7 @@ For a more comprehensive changelog of the latest experimental code, see:
  Kyra:
    - Added support for Kyra1 Amiga French release and DOS Czech fan translation.
    - Improved game controls menu accuracy for all platforms.
+   - Added support for Chinese EOB2.
 
  SCUMM:
    - Added support for unpacked RuSCUMM patches for Russian localizations.
@@ -38,6 +47,9 @@ For a more comprehensive changelog of the latest experimental code, see:
 
  Sword2:
    - Added support for Chinese translation.
+
+ TwinE:
+   - Added support for Japanese translation.
 
  Ultima:
    - Improve Ultima VI responsiveness.
@@ -55,6 +67,7 @@ For a more comprehensive changelog of the latest experimental code, see:
 
  Xeen:
    - Renamed 'xeen' engine to 'mm' for Might & Magic.
+   - Added custom engine option to replace the health gems with HP/SP bars.
 
 
 #### 2.7.1 (2023-XX-XX)

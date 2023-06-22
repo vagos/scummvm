@@ -317,8 +317,10 @@ MODULE_OBJS = \
 	plugins/core/textbox.o \
 	plugins/core/view_frame.o \
 	plugins/ags_agi/ags_agi.o \
+	plugins/ags_app_open_url/ags_app_open_url.o \
 	plugins/ags_blend/ags_blend.o \
 	plugins/ags_clipboard/ags_clipboard.o \
+	plugins/ags_collision_detector/ags_collision_detector.o \
 	plugins/ags_controller/ags_controller.o \
 	plugins/ags_creditz/ags_creditz.o \
 	plugins/ags_creditz/ags_creditz1.o \
@@ -347,9 +349,11 @@ MODULE_OBJS = \
 	plugins/ags_sprite_font/variable_width_font.o \
 	plugins/ags_sprite_font/variable_width_sprite_font.o \
 	plugins/ags_sprite_font/variable_width_sprite_font_clifftop.o \
+	plugins/ags_sprite_video/ags_sprite_video.o \
 	plugins/ags_shell/ags_shell.o \
 	plugins/ags_tcp_ip/ags_tcp_ip.o \
 	plugins/ags_touch/ags_touch.o \
+	plugins/ags_trans/ags_trans.o \
 	plugins/ags_wadjet_util/ags_wadjet_util.o \
 	plugins/ags_waves/ags_waves.o \
 	plugins/ags_waves/data.o \

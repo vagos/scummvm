@@ -45,7 +45,7 @@ using Shared::PlaneScaling;
 
 // Sprite batch, defines viewport and an optional model transformation for the list of sprites
 struct SpriteBatchDesc {
-	uint32_t                 Parent = 0;
+	uint32_t                 Parent = UINT32_MAX;
 	// View rectangle for positioning and clipping, in resolution coordinates
 	// (this may be screen or game frame resolution, depending on circumstances)
 	Rect                     Viewport;
@@ -101,6 +101,9 @@ public:
 	Size        GetNativeSize() const override;
 	Rect        GetRenderDestination() const override;
 
+	bool		SetVsync(bool enabled) override;
+	bool		GetVsync() const override;
+
 	void        BeginSpriteBatch(const Rect &viewport, const SpriteTransform &transform,
 	                             Shared::GraphicFlip flip = Shared::kFlip_None, PBitmap surface = nullptr) override;
 	void        EndSpriteBatch() override;
@@ -141,6 +144,11 @@ protected:
 	virtual void OnSetRenderFrame(const Rect &dst_rect);
 	// Called when the new filter is set
 	virtual void OnSetFilter();
+
+	// Try changing vsync setting; fills new current mode in vsync_res,
+	// returns whether the new setting was set successfully.
+	virtual bool SetVsyncImpl(bool vsync, bool &vsync_res) { return false; }
+
 	// Initialize sprite batch and allocate necessary resources
 	virtual void InitSpriteBatch(size_t index, const SpriteBatchDesc &desc) = 0;
 	// Gets the index of a last draw entry (sprite)
@@ -156,6 +164,9 @@ protected:
 	Rect                _dstRect;       // rendering destination rect
 	Rect                _filterRect;    // filter scaling destination rect (before final scaling)
 	PlaneScaling        _scaling;       // native -> render dest coordinate transformation
+
+	// Capability flags
+	bool				_capsVsync = false; // is vsync available
 
 	// Callbacks
 	GFXDRV_CLIENTCALLBACK _pollingCallback;
@@ -207,6 +218,7 @@ protected:
 // properties. It may be shared between multiple sprites if necessary.
 struct TextureData {
 	uint32_t ID = UINT32_MAX;
+	bool RenderTarget = false; // replace with flags later
 	virtual ~TextureData() = default;
 protected:
 	TextureData() = default;
@@ -240,9 +252,9 @@ public:
 	// Get shared texture from cache, or create from bitmap and assign ID
 	IDriverDependantBitmap *GetSharedDDB(uint32_t sprite_id, Bitmap *bitmap, bool hasAlpha, bool opaque) override;
 	// Removes the shared texture reference, will force the texture to recreate next time
-	 void ClearSharedDDB(uint32_t sprite_id) override;
-	 // Updates shared texture data, but only if it is present in the cache
-	 void UpdateSharedDDB(uint32_t sprite_id, Bitmap *bitmap, bool hasAlpha, bool opaque) override;
+	void ClearSharedDDB(uint32_t sprite_id) override;
+	// Updates shared texture data, but only if it is present in the cache
+	void UpdateSharedDDB(uint32_t sprite_id, Bitmap *bitmap, bool hasAlpha, bool opaque) override;
 	void DestroyDDB(IDriverDependantBitmap* ddb) override;
 
 	// Sets stage screen parameters for the current batch.
@@ -337,6 +349,8 @@ private:
 	// - this lets to share same texture data among multiple sprites on screen.
 	// TextureCacheItem stores weak references to the existing texture tiles,
 	// identified by an arbitrary uint32 number.
+	// TODO: a curious topic to consider: reuse released TextureData for
+	// textures of the same size (research potential performance impact).
 	struct TextureCacheItem {
 		GraphicResolution Res;
 		std::weak_ptr<TextureData> Data;

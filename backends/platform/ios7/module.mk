@@ -6,7 +6,9 @@ MODULE_OBJS := \
 	ios7_osys_sound.o \
 	ios7_osys_video.o \
 	ios7_osys_misc.o \
+	ios7_misc.o \
 	ios7_main.o \
+	ios7_options.o \
 	ios7_video.o \
 	ios7_keyboard.o \
 	ios7_scummvm_view_controller.o \

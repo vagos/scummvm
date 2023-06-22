@@ -46,7 +46,7 @@ enum {
 };
 
 struct PaletteInfo {
-	int paletteId;
+	CastMemberID paletteId;
 
 	byte firstColor;
 	byte lastColor;
@@ -66,7 +66,7 @@ struct PaletteInfo {
 	byte colorCode;
 
 	PaletteInfo() {
-		paletteId = 0;
+		paletteId = CastMemberID(0, 0);
 		firstColor = lastColor = 0;
 		flags = 0; colorCycling = false;
 		normal = false; fadeToWhite = false;
@@ -115,11 +115,12 @@ public:
 	uint8 _transArea; // 1 - Whole Window, 0 - Changing Area
 	uint8 _transChunkSize;
 	TransitionType _transType;
+	CastMemberID _trans;
 	PaletteInfo _palette;
 	uint8 _tempo;
 
 	uint8 _scoreCachedTempo;
-	int _scoreCachedPaletteId;
+	CastMemberID _scoreCachedPaletteId;
 
 	CastMemberID _sound1;
 	uint8 _soundType1;

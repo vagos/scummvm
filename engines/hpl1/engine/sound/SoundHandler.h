@@ -41,7 +41,7 @@ class cWorld3D;
 
 //----------------------------------------
 
-enum eSoundDest {
+enum eSoundDest : unsigned int {
 	eSoundDest_World = eFlagBit_0,
 	eSoundDest_Gui = eFlagBit_1,
 	eSoundDest_All = eFlagBit_All
@@ -110,7 +110,7 @@ typedef cSTLIterator<cSoundEntry, tSoundEntryList, tSoundEntryListIt> tSoundEntr
 
 //----------------------------------------
 
-typedef Hpl1::Std::map<tString, int> tPlayedSoundNumMap;
+typedef Common::StableMap<tString, int> tPlayedSoundNumMap;
 typedef tPlayedSoundNumMap::iterator tPlayedSoundNumMapIt;
 
 //----------------------------------------

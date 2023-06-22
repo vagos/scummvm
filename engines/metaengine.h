@@ -165,6 +165,11 @@ public:
 	/** Returns the number of bytes used for MD5-based detection, or 0 if not supported. */
 	virtual uint getMD5Bytes() const = 0;
 
+	/** Returns the number of game variants or -1 if unknown */
+	virtual int getGameVariantCount() const {
+		return -1;
+	}
+
 	/**
 	 * The default version of this method will just parse the options string from
 	 * the config manager. However it also allows the meta engine to post process
@@ -554,6 +559,17 @@ public:
 	 * This is used when failing to read the header from a savegame file.
 	 */
 	static void fillDummyHeader(ExtendedSavegameHeader *header);
+
+	/**
+	 * Decode the date from a savegame header into a calendar date.  The month and day are both 1-based.
+	 */
+	static void decodeSavegameDate(const ExtendedSavegameHeader *header, uint16 &outYear, uint8 &outMonth, uint8 &outDay);
+
+	/**
+	 * Decode the time from a savegame header into a wall clock time.
+	 */
+	static void decodeSavegameTime(const ExtendedSavegameHeader *header, uint8 &outHour, uint8 &outMinute);
+
 	/**
 	 * Read the extended savegame header from the given savegame file.
 	 */

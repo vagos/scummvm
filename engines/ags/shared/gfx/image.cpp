@@ -45,12 +45,15 @@ BITMAP *decodeImageStream(Common::SeekableReadStream &stream, color *pal) {
 		const Graphics::Surface *src = decoder.getSurface();
 
 		// Copy the decoded surface
-		Surface *dest = new Surface(src->w, src->h, src->format);
+		int bpp = 8 * src->format.bytesPerPixel;
+		if (bpp == 24)
+			bpp = 32;
+		Surface *dest = (Surface *)create_bitmap_ex(bpp, src->w, src->h);
 		dest->blitFrom(*src);
 
 		// Copy the palette
 		const byte *palP = decoder.getPalette();
-		if (palP) {
+		if (palP && pal) {
 			for (int idx = 0; idx < 256; ++idx, palP += 3) {
 				pal[idx].r = palP[0];
 				pal[idx].g = palP[1];

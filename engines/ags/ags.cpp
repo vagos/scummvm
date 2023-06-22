@@ -95,7 +95,7 @@ AGSEngine::AGSEngine(OSystem *syst, const AGSGameDescription *gameDesc) : Engine
 AGSEngine::~AGSEngine() {
 	if (_globals && _G(proper_exit) == 0) {
 		_G(platform)->DisplayAlert("Error: the program has exited without requesting it.\n"
-		                           "Program pointer: %+03d  (write this number down), ACI version %s\n"
+		                           "Program pointer: %+03d  (write this number down), engine version %s\n"
 		                           "If you see a list of numbers above, please write them down and contact\n"
 		                           "developers. Otherwise, note down any other information displayed.",
 		                           _G(our_eip), _G(EngineVersion).LongString.GetCStr());
@@ -167,6 +167,8 @@ Common::Error AGSEngine::run() {
 
 	if (ConfMan.hasKey("display_fps"))
 		_G(display_fps) = ConfMan.getBool("display_fps") ? AGS3::kFPS_Forced : AGS3::kFPS_Hide;
+
+	_G(saveThumbnail) = !(Common::checkGameGUIOption(GAMEOPTION_NO_SAVE_THUMBNAIL, ConfMan.get("guioptions")));
 
 	AGS3::ConfigTree startup_opts;
 	int res = AGS3::main_process_cmdline(startup_opts, ARGC, ARGV);

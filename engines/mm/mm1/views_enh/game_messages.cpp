@@ -73,6 +73,7 @@ bool GameMessages::msgInfo(const InfoMessage &msg) {
 	_yCallback = msg._yCallback;
 	_nCallback = msg._nCallback;
 	_keyCallback = msg._keyCallback;
+	_fontReduced = msg._fontReduced;
 
 	// Add the view
 	addView(this);
@@ -155,7 +156,8 @@ bool GameMessages::msgMouseDown(const MouseDownMessage &msg) {
 	// If yes/no prompting, also pass events to buttons view
 	if (_yCallback)
 		return send("MessagesYesNo", msg);
-	return false;
+
+	return msgAction(KeybindingAction(KEYBIND_SELECT));
 }
 
 bool GameMessages::msgMouseUp(const MouseUpMessage &msg) {

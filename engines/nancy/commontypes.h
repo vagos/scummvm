@@ -46,18 +46,6 @@ static const int8 kFlagNoLabel			= -1;
 static const int8 kEvNoEvent			= -1;
 static const int8 kFrNoFrame			= -1;
 
-// Event flags
-static const byte kEvNotOccurred 		= 1;
-static const byte kEvOccurred 			= 2;
-
-// Logic conditions
-static const byte kLogUsed				= 1;
-static const byte kLogNotUsed			= 2;
-
-// Inventory items flags
-static const byte kInvEmpty				= 1;
-static const byte kInvHolding			= 2;
-
 // Inventory items use types
 static const byte kInvItemUseThenLose	= 0;
 static const byte kInvItemKeepAlways	= 1;
@@ -128,6 +116,14 @@ struct FlagDescription {
 	byte flag = 0;
 };
 
+struct SceneChangeWithFlag {
+	SceneChangeDescription _sceneChange;
+	FlagDescription _flag;
+
+	void readData(Common::SeekableReadStream &stream, bool longFormat = false);
+	void execute();
+};
+
 // Describes a hotspot
 struct HotspotDescription {
 	uint16 frameID = 0;
@@ -142,7 +138,7 @@ struct BitmapDescription {
 	Common::Rect src;
 	Common::Rect dest;
 
-	void readData(Common::SeekableReadStream &stream);
+	void readData(Common::SeekableReadStream &stream, bool frameIsLong = false);
 };
 
 // Describes 10 event flag changes to be executed when an action is triggered
@@ -164,15 +160,17 @@ struct SecondaryVideoDescription {
 
 // Descrbes a single sound. Combines four different structs found in the data in one
 struct SoundDescription {
-	enum Type { kNormal, kMenu, kDIGI, kScene };
-
 	Common::String name;
 	uint16 channelID = 0;
 	uint16 numLoops = 0;
 	uint16 volume = 0;
 	uint16 panAnchorFrame = 0;
+	uint32 samplesPerSec = 0;
 
-	void read(Common::SeekableReadStream &stream, Type type);
+	void readNormal(Common::SeekableReadStream &stream);
+	void readDIGI(Common::SeekableReadStream &stream);
+	void readMenu(Common::SeekableReadStream &stream);
+	void readScene(Common::SeekableReadStream &stream);
 };
 
 // Structs inside nancy.dat, which contains all the data that was

@@ -38,6 +38,7 @@ Globals::Globals() {
 }
 
 Globals::~Globals() {
+	delete _monsters;
 	g_globals = nullptr;
 }
 
@@ -66,7 +67,8 @@ bool Globals::load(bool isEnhanced) {
 	if (!_font.load("font.bmp"))
 		return false;
 
-	if (!_monsters.load() || !_items.load())
+	_monsters = new Monsters();
+	if (!_monsters->load() || !_items.load())
 		return false;
 
 	// Load roster
@@ -142,15 +144,15 @@ Common::String Globals::operator[](const Common::String &name) const {
 	assert(_strings.contains(name));
 	Common::String result = _strings[name];
 
-	if (g_engine->isEnhanced() && isMapStr)
+	if (g_engine->isEnhanced() && name.hasPrefix("maps."))
 		result = searchAndReplace(result, "\n", " ");
 
 	return result;
 }
 
-
 void Globals::synchronize(Common::Serializer &s) {
 	s.syncAsByte(_startingTown);
+	s.syncAsByte(_minimapOn);
 
 	// Sync the state information
 	_party.synchronize(s);

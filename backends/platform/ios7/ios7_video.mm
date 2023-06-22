@@ -686,14 +686,23 @@ uint getSizeNextPOT(uint size) {
 		[self rebuildFrameBuffer];
 	}
 
-	BOOL isLandscape = (self.bounds.size.width > self.bounds.size.height); // UIDeviceOrientationIsLandscape([[UIDevice currentDevice] orientation]);
+#if TARGET_OS_IOS
+	UIInterfaceOrientation interfaceOrientation = UIInterfaceOrientationUnknown;
+	if (@available(iOS 13.0, *)) {
+		interfaceOrientation = [[[self window] windowScene] interfaceOrientation];
+	} else {
+		interfaceOrientation = [[UIApplication sharedApplication] statusBarOrientation];
+	}
+	BOOL isLandscape = UIInterfaceOrientationIsLandscape(interfaceOrientation);
+#else // TVOS
+	BOOL isLandscape = YES;
+#endif
 
 	int screenWidth, screenHeight;
 	if (isLandscape) {
 		screenWidth = MAX(_renderBufferWidth, _renderBufferHeight);
 		screenHeight = MIN(_renderBufferWidth, _renderBufferHeight);
-	}
-	else {
+	} else {
 		screenWidth = MIN(_renderBufferWidth, _renderBufferHeight);
 		screenHeight = MAX(_renderBufferWidth, _renderBufferHeight);
 	}
@@ -785,18 +794,21 @@ uint getSizeNextPOT(uint size) {
 	// So for now disable this code when compiled with an older SDK, which means it is only
 	// available when running on iOS 11+ if it has been compiled on iOS 11+
 #ifdef __IPHONE_11_0
-#if __has_builtin(__builtin_available)
 	if ( @available(iOS 11, tvOS 11, *) ) {
-#else
-	if ( [[[UIApplication sharedApplication] keyWindow] respondsToSelector:@selector(safeAreaInsets)] ) {
-#endif
 		CGRect screenSize = [[UIScreen mainScreen] bounds];
 		CGRect newFrame = screenSize;
 #if TARGET_OS_IOS
 		UIEdgeInsets inset = [[[UIApplication sharedApplication] keyWindow] safeAreaInsets];
-		UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+		UIInterfaceOrientation orientation = UIInterfaceOrientationUnknown;
+		if (@available(iOS 13.0, *)) {
+			orientation = [[[self window] windowScene] interfaceOrientation];
+		} else {
+			orientation = [[UIApplication sharedApplication] statusBarOrientation];
+		}
 		if ( orientation == UIInterfaceOrientationPortrait ) {
 			newFrame = CGRectMake(screenSize.origin.x, screenSize.origin.y + inset.top, screenSize.size.width, screenSize.size.height - inset.top);
+		} else if ( orientation == UIInterfaceOrientationPortraitUpsideDown ) {
+			newFrame = CGRectMake(screenSize.origin.x, screenSize.origin.y, screenSize.size.width, screenSize.size.height - inset.top);
 		} else if ( orientation == UIInterfaceOrientationLandscapeLeft ) {
 			newFrame = CGRectMake(screenSize.origin.x, screenSize.origin.y, screenSize.size.width - inset.right, screenSize.size.height);
 		} else if ( orientation == UIInterfaceOrientationLandscapeRight ) {
@@ -807,6 +819,13 @@ uint getSizeNextPOT(uint size) {
 	}
 #endif
 }
+
+#ifdef __IPHONE_11_0
+// This delegate method is called when the safe area of the view changes
+-(void)safeAreaInsetsDidChange {
+	[self adjustViewFrameForSafeArea];
+}
+#endif
 
 - (void)setViewTransformation {
 	// Scale the shake offset according to the overlay size. We need this to
@@ -845,6 +864,17 @@ uint getSizeNextPOT(uint size) {
 	_events.pop_front();
 	[_eventLock unlock];
 	return true;
+}
+
+- (void)getMouseScaleFactorX:(CGFloat *)x andY:(CGFloat *)y {
+	if (_videoContext.overlayInGUI) {
+		// No scaling in overlay
+		*x = (CGFloat)_videoContext.overlayWidth / self.bounds.size.width;
+		*y = (CGFloat)_videoContext.overlayHeight / self.bounds.size.height;
+	} else {
+		*x = (CGFloat)_videoContext.screenWidth / self.bounds.size.width;
+		*y = (CGFloat)_videoContext.screenHeight / self.bounds.size.height;
+	}
 }
 
 - (bool)getMouseCoords:(CGPoint)point eventX:(int *)x eventY:(int *)y {
@@ -919,12 +949,20 @@ uint getSizeNextPOT(uint size) {
 	}
 }
 
-#if TARGET_OS_IOS
-- (void)deviceOrientationChanged:(UIDeviceOrientation)orientation {
-	[self addEvent:InternalEvent(kInputOrientationChanged, orientation, 0)];
+- (void)virtualController:(bool)connect {
+	if (@available(iOS 15.0, *)) {
+		for (GameController *c : _controllers) {
+			if ([c isKindOfClass:GamepadController.class]) {
+				[(GamepadController*)c virtualController:connect];
+			}
+		}
+	}
+}
 
-	BOOL isLandscape = (self.bounds.size.width > self.bounds.size.height);
-	if (isLandscape) {
+#if TARGET_OS_IOS
+- (void)interfaceOrientationChanged:(UIInterfaceOrientation)orientation {
+	[self addEvent:InternalEvent(kInputOrientationChanged, orientation, 0)];
+	if (UIInterfaceOrientationIsLandscape(orientation)) {
 		[self hideKeyboard];
 	} else {
 		[self showKeyboard];
@@ -971,7 +1009,7 @@ uint getSizeNextPOT(uint size) {
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
 	for (GameController *c : _controllers) {
 		if ([c isKindOfClass:TouchController.class]) {
-			[(TouchController *)c touchesEnded:touches withEvent:event];
+			[(TouchController *)c touchesCancelled:touches withEvent:event];
 		}
 	}
 }

@@ -76,7 +76,7 @@ struct TilePatternEntry {
 
 class Cast {
 public:
-	Cast(Movie *movie, uint16 castLibID, bool shared = false);
+	Cast(Movie *movie, uint16 castLibID, bool isShared = false, bool isExternal = false);
 	~Cast();
 
 	void loadArchive();
@@ -89,40 +89,36 @@ public:
 	void loadCastDataVWCR(Common::SeekableReadStreamEndian &stream);
 	void loadCastData(Common::SeekableReadStreamEndian &stream, uint16 id, Resource *res);
 	void loadCastInfo(Common::SeekableReadStreamEndian &stream, uint16 id);
+	void loadCastLibInfo(Common::SeekableReadStreamEndian &stream, uint16 id);
 	void loadLingoContext(Common::SeekableReadStreamEndian &stream);
 	void loadExternalSound(Common::SeekableReadStreamEndian &stream);
 	void loadSord(Common::SeekableReadStreamEndian &stream);
 
-	void loadCastMemberData();
-	void loadStxtData(int key, TextCastMember *member);
-	void loadPaletteData(PaletteCastMember *member);
-	void loadFilmLoopData(FilmLoopCastMember *member);
-	void loadBitmapData(int key, BitmapCastMember *bitmapCast);
-	void loadSoundData(int key, SoundCastMember *soundCast);
-
 	int getCastSize();
+	int getCastMaxID();
 	Common::Rect getCastMemberInitialRect(int castId);
 	void setCastMemberModified(int castId);
 	CastMember *setCastMember(CastMemberID castId, CastMember *cast);
 	bool eraseCastMember(CastMemberID castId);
-	CastMember *getCastMember(int castId);
+	CastMember *getCastMember(int castId, bool load = true);
 	CastMember *getCastMemberByNameAndType(const Common::String &name, CastType type);
 	CastMember *getCastMemberByScriptId(int scriptId);
 	CastMemberInfo *getCastMemberInfo(int castId);
 	const Stxt *getStxt(int castId);
 	Common::String getVideoPath(int castId);
+	Common::SeekableReadStreamEndian *getResource(uint32 tag, uint16 id);
 
 	// release all castmember's widget, should be called when we are changing movie.
 	// because widget is handled by channel, thus we should clear all of those run-time info when we are switching the movie. (because we will create new widgets for cast)
 	void releaseCastMemberWidget();
 
 	void dumpScript(const char *script, ScriptType type, uint16 id);
-	PaletteV4 loadPalette(Common::SeekableReadStreamEndian &stream);
 
 	Common::CodePage getFileEncoding();
 	Common::U32String decodeString(const Common::String &str);
 
 	Common::String formatCastSummary(int castId);
+	PaletteV4 loadPalette(Common::SeekableReadStreamEndian &stream, int id);
 
 private:
 	void loadScriptV2(Common::SeekableReadStreamEndian &stream, uint16 id);
@@ -137,6 +133,7 @@ public:
 	uint16 _version;
 	Common::Platform _platform;
 	uint16 _castLibID;
+	bool _isExternal;
 
 	CharMap _macCharsToWin;
 	CharMap _winCharsToMac;
@@ -153,7 +150,8 @@ public:
 
 	Common::Rect _movieRect;
 	uint16 _stageColor;
-	int _defaultPalette;
+	CastMemberID _defaultPalette;
+	int16 _frameRate;
 	TilePatternEntry _tiles[kNumBuiltinTiles];
 
 	LingoArchive *_lingoArchive;
@@ -164,6 +162,8 @@ private:
 	Movie *_movie;
 
 	bool _isShared;
+	bool _loadMutex;
+	Common::Array<CastMember *> _loadQueue;
 
 	Common::String _macName;
 
